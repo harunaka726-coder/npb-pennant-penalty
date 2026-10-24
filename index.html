@@ -57,7 +57,7 @@
       border-radius: 999px;
     }
     nav a.active { color: var(--ink); background: #e8eef6; font-weight: 700; }
-    main { padding: 24px 20px 96px; }
+    main { padding: 24px 20px 112px; }
     .view { display: none; }
     .view.active { display: block; }
     .stack { display: grid; gap: 16px; min-width: 0; }
@@ -259,18 +259,18 @@
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 9;
       background: rgba(255, 255, 255, 0.96);
       border-top: 1px solid var(--line);
-      padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+      padding: 4px 12px calc(6px + env(safe-area-inset-bottom));
     }
+    .ad-wrap { max-width: 1040px; margin: 0 auto; }
     .ad-slot {
-      max-width: 1040px; margin: 0 auto; height: 50px;
-      border: 1px dashed #c5ced8; border-radius: 8px;
-      background: #f7f9fb; color: var(--muted);
+      height: 50px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 12px; position: relative;
+      overflow: hidden;
     }
-    .ad-label { position: absolute; top: 3px; left: 8px; font-size: 10px; letter-spacing: 0.06em; }
+    .ad-slot ins { display: inline-block; width: 320px; height: 50px; }
+    .ad-label { display: block; margin: 0 0 2px; font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
     #toast {
-      position: fixed; left: 50%; bottom: 78px; transform: translateX(-50%) translateY(12px);
+      position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%) translateY(12px);
       background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 8px;
       opacity: 0; pointer-events: none; transition: opacity 160ms ease;
     }
@@ -294,7 +294,7 @@
       .brand { font-size: 15px; line-height: 1.35; }
       nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
       nav a { text-align: center; padding: 8px 4px; }
-      main { padding: 12px 12px 96px; }
+      main { padding: 12px 12px 112px; }
       .card { padding: 14px 12px; }
       .stack { gap: 12px; }
       .score-num { font-size: 56px; }
@@ -338,9 +338,9 @@
   </header>
   <main id="app"><p class="loading">読み込み中…</p></main>
   <footer class="ad-footer">
-    <div class="ad-slot" id="ad-banner" role="complementary" aria-label="広告">
+    <div class="ad-wrap">
       <span class="ad-label">広告</span>
-      <span>広告枠</span>
+      <div class="ad-slot" id="ad-banner" role="complementary" aria-label="広告"></div>
     </div>
   </footer>
   <input id="import-file" type="file" accept="application/json,.json" hidden>
@@ -348,6 +348,8 @@
   <script>
     const app = {
       state: null,
+      public: null,
+      user: null,
       series: { total: true, central: true, pacific: true },
       rankLeague: "central",
       rankSpan: "month",
@@ -357,6 +359,505 @@
     let chain = Promise.resolve();
     let drag = null;
     let toastTimer = 0;
+    const STORAGE_KEY = "pennant-penalty-user-v1";
+    const LANG_KEY = "pennant-penalty-lang";
+    const ADMOB = {
+      appId: "ca-app-pub-1596742811536787~2958363417",
+      bannerId: "ca-app-pub-1596742811536787/8551057719"
+    };
+    const CENTRAL_IDS = ["T", "G", "DB", "C", "S", "D"];
+    const PACIFIC_IDS = ["H", "L", "F", "Bs", "M", "E"];
+    const DEFAULT_DRAFT = {
+      central: ["T", "G", "C", "DB", "D", "S"],
+      pacific: ["H", "F", "M", "Bs", "L", "E"]
+    };
+    const TEAM_EN = {
+      T: "Hanshin", G: "Yomiuri", DB: "DeNA", C: "Hiroshima", S: "Yakult", D: "Chunichi",
+      H: "SoftBank", L: "Seibu", F: "Nippon-Ham", Bs: "Orix", M: "Lotte", E: "Rakuten"
+    };
+    const STR = {
+      ja: {
+        appTitle: "プロ野球順位予想　ペナントペナルティ",
+        home: "ホーム", graph: "グラフ", settings: "設定", language: "言語",
+        loading: "読み込み中…", fetching: "NPBの順位表を取得しています…", offline: "サーバーに接続できません。python app.py で起動しているか確認してください。",
+        both: "両リーグ合計", miss: "ズレ", place: "位",
+        central: "セ・リーグ", pacific: "パ・リーグ", cl: "セ", pl: "パ", total: "合計",
+        centralFull: "セ・リーグ", pacificFull: "パ・リーグ", bothFull: "両リーグ合計",
+        refresh: "最新順位を取得", share: "画像をシェア", copy: "テキストをコピー",
+        basisConfirmed: "採点対象: {label} の確定予想", basisDraft: "採点対象: 未確定の下書き", viewingYear: "{year}年の結果です",
+        pred: "予想順位", current: "現在の順位", leagueTotal: "{name}合計: {total}ズレ", bothTotal: "両リーグ合計: {total}ズレ",
+        perfect: "ドンピシャ", waitStandings: "順位表を取得するとズレを計算します",
+        draftBanner: "表示中のズレは下書きのプレビューです。設定で確定すると、その順位が採点対象になります。",
+        editBanner: "修正中です。表示中のズレは、確定済みの予想です。",
+        fetched: "取得 {label}", cross: " / 突合: {detail}", log: "取得ログ", ok: "取得", ng: "失敗",
+        finished: "{year}年レギュラーシーズン終了", progress: "{when}{total}試合中{played}試合終了　残り{remaining}試合",
+        preparing: "{year}年の予想", preparingNote: "開幕後に順位と試合数が入ります。",
+        viewingBanner: "{year}年の結果を表示しています。", backTo: "{year}年の予想に戻る",
+        finalDay: "レギュラーシーズン最終日", todayGames: "今日の試合結果", recentGames: "直近の試合結果",
+        postseason: "クライマックスシリーズ以降は、NPB公式のページで見られます。",
+        gameDetail: "試合の詳細は、NPB公式のページで見られます。", npbGames: "NPB公式の試合結果",
+        noGames: "表示できる試合結果はまだありません。",
+        trendTitle: "予想ズレ点の推移",
+        trendBody: "採点対象の予想について、開幕日から{end}まで、1日ごとのズレです。試合のない日は前日の順位のままです。0が一番上で、",
+        trendBold: "ズレが大きいほど下のマイナスになります。",
+        endFinal: "順位が確定した日", endLatest: "最新の試合日",
+        oneDay: "まだ1日分です。順位を更新すると、開幕からの線が入ります。",
+        manyDays: "{span}の{count}日分です。",
+        rankTitle: "チーム順位の推移", daily: "日ごと", monthly: "月ごと",
+        rankLead: "実際の順位です。上にあるほど上位です。",
+        monthHelp: "月ごとは、その月の最後の試合日の順位です。",
+        dayHelp: "日ごとは、毎日の順位です。",
+        pickTeam: "チームを選ぶと、予想順位を点線で重ねます。", dash: "点線は予想順位",
+        predHeading: "予想順位",
+        dragNote: "行をドラッグするか、↑↓で並べます。スマホでは左の点を押さえて動かします。確定中は「修正する」を押してからです。各チームの |予想順位 − 実際の順位| を合計し、0ズレがドンピシャです。",
+        previewEmpty: "順位表を取得すると、この並びのズレをプレビューできます。",
+        previewLocked: "確定中のズレは {total} です（セ {c} / パ {p}）。",
+        previewEditing: "修正中の並びは {seen}ズレです。確定中のズレは {total} です。",
+        previewDraft: "この並びを確定すると、現在の順位とのズレは {total} です（セ {c} / パ {p}）。",
+        confirmNew: "この順位で確定する", confirmedBtn: "確定済み", confirmUpdate: "更新して確定する",
+        unlock: "修正する", cancelEdit: "修正をやめる", reset: "初期順に戻す",
+        notConfirmed: "まだ確定していません", firstFinal: "初回確定: {first} / 最終確定: {last}", finalOnly: "最終確定: {last}",
+        history: "変更履歴", historyEmpty: "確定すると、ここに履歴が残ります。",
+        actionConfirm: "確定", actionUpdate: "更新",
+        data: "データ", exportBtn: "データを書き出す", importBtn: "データを読み込む", deleteBtn: "予想データを消す",
+        support: "サポート", privacy: "プライバシーポリシー", contact: "お問い合わせ",
+        season: "シーズン", startBtn: "{year}年の予想を始める", viewResult: "結果を見る", showing: "表示中",
+        leadNone: "シーズンの結果は、まだありません。",
+        leadView: "{view}年の結果を表示しています。順位の編集は{edit}年の予想です。",
+        leadNext: "{year}年の予想を編集しています。順位表は開幕後に入ります。",
+        leadFinished: "{year}年の結果を表示しています。次の年の予想は、開幕前の好きなときに始められます。",
+        leadCurrent: "{year}年の予想を表示しています。",
+        startNote: "始めると、ホームは{next}年の下書きになります。{year}年のズレとグラフは、ここに残ります。",
+        startAsk: "{year}年の予想を始めます。\n{prev}年のズレとグラフは履歴に残ります。ホームは{year}年の下書きに切り替わります。",
+        started: "{year}年の予想を始めました。{prev}年の結果は設定から見られます。",
+        backNotice: "いまの予想に戻りました。",
+        viewingNotice: "{year}年の結果を表示しています。",
+        startTooEarly: "レギュラーシーズンが終わってから、次の年の予想を始められます。",
+        sameOrder: "順位は前回の確定と同じです。",
+        didConfirm: "予想を確定しました。最終確定: {label}",
+        didUpdate: "予想を更新しました。最終確定: {label}",
+        unlocked: "修正できます。確定すると履歴に残ります。",
+        canceled: "修正をやめ、確定済みの順位に戻しました。",
+        resetDone: "初期の下書き順に戻しました。",
+        noConfirm: "まだ確定された予想がありません。",
+        exported: "バックアップを保存しました",
+        importBad: "このアプリのバックアップファイルではありません。",
+        importAsk: "いまの予想を、選んだファイルの内容に置き換えます。",
+        imported: "バックアップを読み込みました。",
+        deleteAsk: "予想、確定、変更履歴、過去シーズンの記録を消します。順位表は残ります。",
+        deleted: "予想データを消しました。順位表はそのままです。",
+        jsonBad: "JSONファイルとして読めませんでした",
+        copyDone: "共有テキストをコピーしました",
+        imageFail: "画像を作れませんでした",
+        imageSaved: "画像を保存しました。そこからLINEやメールで送れます。",
+        saveFail: "保存できませんでした",
+        standingsNotYet: "{year}年の順位表は、まだ公開されていません。",
+        emptyTrend: "まだ推移データがありません。",
+        emptyTrendChart: "まだ推移データがありません。順位を取得すると、その日の点が残ります。",
+        emptyRank: "順位の記録がまだありません。",
+        shareFallback: "プロ野球順位予想　ペナントペナルティ",
+        shareHead: "{mark}プロ野球順位予想　ペナントペナルティ 合計{total}ズレ（セ{c}/パ{p}）",
+        shareStamp: "最終確定: {label}", shareDraft: "未確定の下書き",
+        ad: "広告", adSlot: "広告枠",
+        ariaUp: "{name}を上へ", ariaDown: "{name}を下へ",
+        predAria: "予想{p}位 {name}、現在{a}位、{pen}ズレ",
+        actAria: "現在{a}位 {name}、{pen}ズレ",
+        linesAria: "{name}の予想と現在順位の対応",
+        chartPenalty: "ズレ点の推移", chartRank: "チーム順位の推移"
+      },
+      en: {
+        appTitle: "Pennant Penalty",
+        home: "Home", graph: "Graphs", settings: "Settings", language: "Language",
+        loading: "Loading…", fetching: "Fetching the NPB standings…", offline: "Cannot reach the server. Start it with python app.py.",
+        both: "Both leagues", miss: "miss", place: "",
+        central: "Central League", pacific: "Pacific League", cl: "CL", pl: "PL", total: "Total",
+        centralFull: "Central League", pacificFull: "Pacific League", bothFull: "Both leagues",
+        refresh: "Update standings", share: "Share image", copy: "Copy text",
+        basisConfirmed: "Scoring: prediction confirmed on {label}", basisDraft: "Scoring: unconfirmed draft", viewingYear: "Results for {year}",
+        pred: "Prediction", current: "Current", leagueTotal: "{name} total: {total}", bothTotal: "Both leagues: {total}",
+        perfect: "Exact", waitStandings: "Standings will unlock the score.",
+        draftBanner: "This score is a draft preview. Confirm it in Settings to make it official.",
+        editBanner: "You are editing. The score still uses the confirmed prediction.",
+        fetched: "Fetched {label}", cross: " / Check: {detail}", log: "Fetch log", ok: "OK", ng: "Failed",
+        finished: "{year} regular season complete", progress: "{when}{played} of {total} games played, {remaining} left",
+        preparing: "{year} prediction", preparingNote: "Standings and game counts appear after opening day.",
+        viewingBanner: "Showing {year} results.", backTo: "Back to {year}",
+        finalDay: "Final day of the regular season", todayGames: "Today's games", recentGames: "Latest games",
+        postseason: "Climax Series and later games are on the official NPB site.",
+        gameDetail: "Game details are on the official NPB site.", npbGames: "NPB official results",
+        noGames: "No games to show yet.",
+        trendTitle: "Penalty over time",
+        trendBody: "Daily penalty for the scored prediction, from opening day through {end}. Off days keep the previous order. Zero is at the top, and ",
+        trendBold: "a larger miss falls further into negative numbers.",
+        endFinal: "the day the order was finalized", endLatest: "the latest game day",
+        oneDay: "Only one day so far. Update the standings to fill in the season.",
+        manyDays: "{count} days, {span}.",
+        rankTitle: "Team rank over time", daily: "Daily", monthly: "Monthly",
+        rankLead: "Actual rank. Higher on the chart is a better place.",
+        monthHelp: "Monthly points use the last game day of each month.",
+        dayHelp: "Daily points use every day.",
+        pickTeam: "Choose a team to overlay its predicted rank as a dashed line.", dash: "Dashed line is the predicted rank",
+        predHeading: "Predicted order",
+        dragNote: "Drag a row, or use the arrows. On a phone, hold the dots. If the order is locked, tap Edit first. Each team's |predicted rank − actual rank| is added up. Zero is exact.",
+        previewEmpty: "Fetch the standings to preview this order.",
+        previewLocked: "Confirmed penalty is {total} (CL {c} / PL {p}).",
+        previewEditing: "The order you are editing would be {seen}. The confirmed penalty is {total}.",
+        previewDraft: "Confirming this order would score {total} (CL {c} / PL {p}).",
+        confirmNew: "Confirm this order", confirmedBtn: "Confirmed", confirmUpdate: "Update and confirm",
+        unlock: "Edit", cancelEdit: "Cancel edit", reset: "Reset order",
+        notConfirmed: "Not confirmed yet", firstFinal: "First confirmed: {first} / Last update: {last}", finalOnly: "Last update: {last}",
+        history: "History", historyEmpty: "Confirm an order to keep a history.",
+        actionConfirm: "Confirmed", actionUpdate: "Updated",
+        data: "Data", exportBtn: "Export", importBtn: "Import", deleteBtn: "Delete prediction",
+        support: "Support", privacy: "Privacy policy", contact: "Contact",
+        season: "Season", startBtn: "Start {year}", viewResult: "View", showing: "Showing",
+        leadNone: "No season results yet.",
+        leadView: "Showing {view}. Edits apply to the {edit} prediction.",
+        leadNext: "Editing the {year} prediction. Standings arrive after opening day.",
+        leadFinished: "Showing {year}. You can start next year's prediction any time before opening day.",
+        leadCurrent: "Showing the {year} prediction.",
+        startNote: "Starting moves Home to a {next} draft. The {year} score and graphs stay here.",
+        startAsk: "Start the {year} prediction?\nThe {prev} score and graphs stay in history. Home switches to a {year} draft.",
+        started: "Started the {year} prediction. {prev} stays in Settings.",
+        backNotice: "Back to the current prediction.",
+        viewingNotice: "Showing {year}.",
+        startTooEarly: "You can start the next year after the regular season ends.",
+        sameOrder: "This order matches the last confirmation.",
+        didConfirm: "Prediction confirmed. Last update: {label}",
+        didUpdate: "Prediction updated. Last update: {label}",
+        unlocked: "You can edit. Confirming adds a history entry.",
+        canceled: "Edit canceled. Restored the confirmed order.",
+        resetDone: "Restored the initial draft.",
+        noConfirm: "There is no confirmed prediction yet.",
+        exported: "Backup saved",
+        importBad: "This is not a backup from this app.",
+        importAsk: "Replace the current prediction with this file?",
+        imported: "Backup imported.",
+        deleteAsk: "This deletes the prediction, confirmation, history, and saved seasons. Standings stay.",
+        deleted: "Prediction data deleted. Standings stay.",
+        jsonBad: "This file is not JSON.",
+        copyDone: "Share text copied",
+        imageFail: "Could not create the image",
+        imageSaved: "Image saved. Send it from your photos or files.",
+        saveFail: "Could not save",
+        standingsNotYet: "The {year} standings are not published yet.",
+        emptyTrend: "No history yet.",
+        emptyTrendChart: "No history yet. Fetch the standings to record a point.",
+        emptyRank: "No rank history yet.",
+        shareFallback: "Pennant Penalty",
+        shareHead: "{mark}Pennant Penalty total {total} (CL {c}/PL {p})",
+        shareStamp: "Last update: {label}", shareDraft: "Unconfirmed draft",
+        ad: "Ad", adSlot: "Ad slot",
+        ariaUp: "Move {name} up", ariaDown: "Move {name} down",
+        predAria: "Predicted {p}, {name}, now {a}, penalty {pen}",
+        actAria: "Now {a}, {name}, penalty {pen}",
+        linesAria: "Links from predicted to current order, {name}",
+        chartPenalty: "Penalty over time", chartRank: "Team rank over time"
+      }
+    };
+
+    function detectLang() {
+      const list = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || "ja"];
+      for (const tag of list) {
+        const base = String(tag || "").toLowerCase().split("-")[0];
+        if (base === "ja") return "ja";
+        if (base === "en") return "en";
+      }
+      return "en";
+    }
+
+    function savedLang() {
+      try {
+        const value = localStorage.getItem(LANG_KEY);
+        if (value === "ja" || value === "en") return value;
+      } catch (err) { /* use the device language */ }
+      return "";
+    }
+
+    let lang = savedLang() || detectLang();
+
+    function setLang(next) {
+      if (next !== "ja" && next !== "en" || next === lang) return;
+      lang = next;
+      localStorage.setItem(LANG_KEY, next);
+      const link = document.querySelector("[data-privacy]");
+      if (link) link.href = privacyUrl();
+      if (app.public) paint();
+      else applyChrome();
+    }
+
+    function t(key, vars) {
+      const table = STR[lang] || STR.en;
+      let text = table[key] || STR.en[key] || STR.ja[key] || key;
+      if (vars) {
+        Object.keys(vars).forEach((name) => {
+          text = text.replaceAll(`{${name}}`, vars[name]);
+        });
+      }
+      return text;
+    }
+
+    function applyChrome() {
+      document.documentElement.lang = lang === "ja" ? "ja" : "en";
+      document.title = t("appTitle");
+      const brand = document.querySelector(".brand");
+      if (brand) brand.textContent = t("appTitle");
+      document.querySelectorAll("nav a").forEach((link) => {
+        const key = link.dataset.route;
+        if (key) link.textContent = t(key === "graph" ? "graph" : key === "settings" ? "settings" : "home");
+      });
+      const adLabel = document.querySelector(".ad-label");
+      if (adLabel) adLabel.textContent = t("ad");
+      const slot = document.getElementById("ad-banner");
+      if (slot) slot.setAttribute("aria-label", t("ad"));
+    }
+
+    function privacyUrl() {
+      return `https://harunaka726-coder.github.io/npb-pennant-penalty/privacy.html?lang=${lang}`;
+    }
+
+    function mountAd() {
+      const slot = document.getElementById("ad-banner");
+      if (!slot || slot.dataset.mounted) return;
+      slot.dataset.mounted = "1";
+      slot.dataset.admobApp = ADMOB.appId;
+      slot.dataset.admobUnit = ADMOB.bannerId;
+      const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+      const plugin = native && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob;
+      if (plugin) {
+        plugin.initialize({ appId: ADMOB.appId, initializeForTesting: false }).then(() => plugin.showBanner({
+          adId: ADMOB.bannerId,
+          adSize: "BANNER",
+          position: "BOTTOM_CENTER",
+          margin: 0
+        })).catch(() => {});
+        return;
+      }
+      const client = ADMOB.bannerId.split("/")[0];
+      const unit = ADMOB.bannerId.split("/")[1];
+      const ins = document.createElement("ins");
+      ins.className = "adsbygoogle";
+      ins.style.display = "inline-block";
+      ins.style.width = "320px";
+      ins.style.height = "50px";
+      ins.setAttribute("data-ad-client", client);
+      ins.setAttribute("data-ad-slot", unit);
+      slot.appendChild(ins);
+      const script = document.createElement("script");
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(client)}`;
+      script.onload = () => {
+        try { (window.adsbygoogle = window.adsbygoogle || []).push({}); }
+        catch (err) { /* Google fills this slot when the unit is ready */ }
+      };
+      document.head.appendChild(script);
+    }
+
+    function defaultUser() {
+      return {
+        draft: { central: DEFAULT_DRAFT.central.slice(), pacific: DEFAULT_DRAFT.pacific.slice() },
+        confirmed: null,
+        locked: false,
+        history: [],
+        archives: [],
+        season_year: null,
+        view_year: null
+      };
+    }
+
+    function validLineup(ids, league) {
+      const expected = new Set(league === "central" ? CENTRAL_IDS : PACIFIC_IDS);
+      return Array.isArray(ids) && ids.length === 6 && new Set(ids).size === 6 && ids.every((id) => expected.has(id));
+    }
+
+    function repairUser(raw) {
+      const user = defaultUser();
+      const source = raw && typeof raw === "object" ? raw : {};
+      ["central", "pacific"].forEach((league) => {
+        if (validLineup(source.draft && source.draft[league], league)) user.draft[league] = source.draft[league].slice();
+      });
+      const confirmed = source.confirmed;
+      if (confirmed && validLineup(confirmed.central, "central") && validLineup(confirmed.pacific, "pacific")) {
+        user.confirmed = {
+          central: confirmed.central.slice(),
+          pacific: confirmed.pacific.slice(),
+          confirmed_at: confirmed.confirmed_at || "",
+          confirmed_label: confirmed.confirmed_label || confirmed.updated_label || "",
+          updated_at: confirmed.updated_at || confirmed.confirmed_at || "",
+          updated_label: confirmed.updated_label || confirmed.confirmed_label || ""
+        };
+      }
+      user.locked = Boolean(source.locked && user.confirmed);
+      user.history = Array.isArray(source.history) ? source.history : [];
+      user.archives = Array.isArray(source.archives) ? source.archives.filter((item) => item && item.year) : [];
+      user.season_year = Number.isInteger(source.season_year) ? source.season_year : null;
+      user.view_year = Number.isInteger(source.view_year) ? source.view_year : null;
+      if (user.view_year && !user.archives.some((item) => item.year === user.view_year)) user.view_year = null;
+      return user;
+    }
+
+    function loadUser() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return repairUser(JSON.parse(raw));
+      } catch (err) { /* keep the default */ }
+      return null;
+    }
+
+    function saveUser(user) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+      app.user = user;
+    }
+
+    function migrateLegacy(data) {
+      if (!data || !data.legacy_user || localStorage.getItem(STORAGE_KEY)) return false;
+      saveUser(repairUser(data.legacy_user));
+      return true;
+    }
+
+    function nowLabel() {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+      }).formatToParts(new Date());
+      const get = (type) => parts.find((part) => part.type === type).value;
+      return `${get("year")}/${get("month")}/${get("day")} ${get("hour")}:${get("minute")}`;
+    }
+
+    function sameOrder(confirmed, lineup) {
+      return confirmed.central.join() === lineup.central.join() && confirmed.pacific.join() === lineup.pacific.join();
+    }
+
+    function rankRows(prediction, actual) {
+      const actualRank = {};
+      actual.forEach((id, index) => { actualRank[id] = index + 1; });
+      return prediction.map((team, index) => {
+        const predicted = index + 1;
+        const current = actualRank[team];
+        const delta = current - predicted;
+        const info = teamById(team);
+        return {
+          team, predicted_rank: predicted, actual_rank: current, delta, penalty: Math.abs(delta),
+          name: displayName(info), full_name: info.full_name, colors: info.colors
+        };
+      });
+    }
+
+    function scoreBundle(prediction, standings, snapshots, provisional) {
+      const ready = standings && validLineup(standings.central, "central") && validLineup(standings.pacific, "pacific")
+        && prediction && validLineup(prediction.central, "central") && validLineup(prediction.pacific, "pacific");
+      if (!ready) return { score: null, trend: [], ranks: null };
+      const blocks = {};
+      let total = 0;
+      ["central", "pacific"].forEach((league) => {
+        const rows = rankRows(prediction[league], standings[league]);
+        const leagueTotal = rows.reduce((sum, row) => sum + row.penalty, 0);
+        total += leagueTotal;
+        blocks[league] = { name: t(league), total: leagueTotal, rows };
+      });
+      const score = { total, central: blocks.central, pacific: blocks.pacific, provisional: Boolean(provisional) };
+      const trend = [];
+      (snapshots || []).forEach((snap) => {
+        if (!validLineup(snap.central, "central") || !validLineup(snap.pacific, "pacific")) return;
+        const central = rankRows(prediction.central, snap.central).reduce((sum, row) => sum + row.penalty, 0);
+        const pacific = rankRows(prediction.pacific, snap.pacific).reduce((sum, row) => sum + row.penalty, 0);
+        trend.push({ date: snap.date, central, pacific, total: central + pacific });
+      });
+      const ranks = {};
+      ["central", "pacific"].forEach((league) => {
+        const dates = [];
+        const series = {};
+        prediction[league].forEach((id) => { series[id] = []; });
+        (snapshots || []).forEach((snap) => {
+          if (!validLineup(snap[league], league)) return;
+          dates.push(snap.date);
+          const place = {};
+          snap[league].forEach((id, index) => { place[id] = index + 1; });
+          prediction[league].forEach((id) => series[id].push(place[id]));
+        });
+        ranks[league] = {
+          dates,
+          teams: prediction[league].map((id, index) => {
+            const info = teamById(id);
+            return { id, name: displayName(info), colors: info.colors, predicted_rank: index + 1, ranks: series[id] };
+          })
+        };
+      });
+      return { score, trend, ranks };
+    }
+
+    function activePrediction(user) {
+      if (user.confirmed) return { central: user.confirmed.central.slice(), pacific: user.confirmed.pacific.slice() };
+      return { central: user.draft.central.slice(), pacific: user.draft.pacific.slice() };
+    }
+
+    function compose() {
+      const pub = app.public || {};
+      const user = app.user || defaultUser();
+      const standings = pub.standings || null;
+      const prediction = activePrediction(user);
+      const using = user.confirmed ? "confirmed" : "draft";
+      const live = scoreBundle(prediction, standings, pub.snapshots || [], using === "draft");
+      const archive = (user.archives || []).find((item) => item.year === user.view_year) || null;
+      let archiveView = null;
+      if (archive) {
+        const archived = scoreBundle(archive.prediction, archive.standings, archive.snapshots || [], false);
+        archiveView = {
+          year: archive.year,
+          score: archived.score,
+          trend: archived.trend,
+          ranks: archived.ranks,
+          standings: archive.standings,
+          progress: archive.progress,
+          recent_games: archive.recent_games || [],
+          games_url: archive.games_url || pub.games_url
+        };
+      }
+      const ready = standings && validLineup(standings.central, "central") && validLineup(standings.pacific, "pacific");
+      const seasonYear = standings && standings.season;
+      const canStart = Boolean(ready && standings.season_finished && !(user.season_year && seasonYear && user.season_year !== seasonYear));
+      return {
+        teams: pub.teams || [],
+        draft: user.draft,
+        confirmed: user.confirmed,
+        confirmed_label: user.confirmed ? user.confirmed.updated_label : null,
+        first_confirmed_label: user.confirmed ? user.confirmed.confirmed_label : null,
+        locked: user.locked,
+        history: (user.history || []).slice().reverse().slice(0, 30),
+        standings,
+        using,
+        score: live.score,
+        trend: live.trend,
+        ranks: live.ranks,
+        draft_differs: Boolean(user.confirmed && !sameOrder(user.confirmed, user.draft)),
+        stale: pub.stale,
+        last_error: pub.last_error,
+        snapshot_count: (pub.snapshots || []).length,
+        season_year: user.season_year || seasonYear || null,
+        viewing_year: archive ? archive.year : null,
+        can_start_next: canStart,
+        next_year: canStart ? Number(seasonYear) + 1 : null,
+        archives: (user.archives || []).map((item) => ({ year: item.year, label: item.archived_label })),
+        progress: pub.progress,
+        recent_games: pub.recent_games || [],
+        games_url: pub.games_url,
+        archive_view: archiveView,
+        snapshots: pub.snapshots || []
+      };
+    }
+
+    function displayName(team) {
+      if (!team) return "";
+      if (lang === "en" && TEAM_EN[team.id]) return TEAM_EN[team.id];
+      return team.name || team.id;
+    }
+
+    function sideName(game, side) {
+      const id = game[side === "away" ? "away_id" : "home_id"];
+      if (id) return displayName(teamById(id));
+      return side === "away" ? game.away : game.home;
+    }
 
     function esc(value) {
       return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -384,19 +885,31 @@
         body: JSON.stringify(body || {})
       });
       const data = await res.json();
-      if (!res.ok) toast(data.error || "保存できませんでした");
+      if (!res.ok) toast(data.error || t("saveFail"));
       return data;
     }
 
+    function paint(key, vars) {
+      app.state = compose();
+      render(window.scrollY);
+      if (key) toast(t(key, vars));
+    }
+
     function applyState(data) {
+      if (data && data.teams) app.public = data;
+      migrateLegacy(data);
+      app.user = loadUser() || defaultUser();
+      if (!localStorage.getItem(STORAGE_KEY)) saveUser(app.user);
       const y = window.scrollY;
-      app.state = data;
+      app.state = compose();
       render(y);
-      if (data.notice) toast(data.notice);
+      if (data && data.notice_code === "standingsNotYet") toast(t("standingsNotYet", { year: (app.user && app.user.season_year) || "" }));
+      else if (data && data.notice && data.notice_code !== "standingsNotYet") toast(data.notice);
     }
 
     function teamById(id) {
-      return (app.state.teams || []).find((team) => team.id === id) || { id, name: id, full_name: id, colors: ["#ccc", "#111"], stroke: "#555" };
+      const catalog = (app.public && app.public.teams) || (app.state && app.state.teams) || [];
+      return catalog.find((team) => team.id === id) || { id, name: id, full_name: id, colors: ["#ccc", "#111"], stroke: "#555" };
     }
 
     function arrow(delta) {
@@ -416,7 +929,7 @@
     }
 
     function club(row, rank, withName) {
-      const name = withName ? `<span class="name" title="${esc(row.full_name)}">${esc(row.name)}</span>` : "";
+      const name = withName ? `<span class="name" title="${esc(row.full_name)}">${esc(displayName(row))}</span>` : "";
       return `<div class="club"><span class="rank">${rank}</span>${swatch(row.colors)}${name}</div>`;
     }
 
@@ -456,7 +969,18 @@
     function jpDate(iso) {
       const parts = String(iso || "").split("-");
       if (parts.length !== 3) return "";
+      if (lang !== "ja") return `${Number(parts[1])}/${Number(parts[2])}`;
       return `${Number(parts[1])}月${Number(parts[2])}日`;
+    }
+
+    function missLabel(value) {
+      return lang === "ja" ? `${value}ズレ` : String(value);
+    }
+
+    function actionLabel(action) {
+      if (action === "confirm" || action === "確定") return t("actionConfirm");
+      if (action === "update" || action === "更新") return t("actionUpdate");
+      return action;
     }
 
     function todayJst() {
@@ -465,16 +989,21 @@
 
     function shareText(full) {
       const score = display().score;
-      if (!score) return "プロ野球順位予想　ペナントペナルティ";
-      const mark = score.provisional ? "（未確定）" : "";
-      const head = `${mark}プロ野球順位予想　ペナントペナルティ 合計${score.total}ズレ（セ${score.central.total}/パ${score.pacific.total}）`;
+      if (!score) return t("shareFallback");
+      const mark = score.provisional ? (lang === "ja" ? "（未確定）" : "(draft) ") : "";
+      const head = t("shareHead", { mark, total: score.total, c: score.central.total, p: score.pacific.total });
       const compactLine = (block) => block.rows.map((row) => `${row.name}${row.predicted_rank}→${row.actual_rank}`).join(" ");
       if (!full) {
-        return `${head}\nセ ${compactLine(score.central)}\nパ ${compactLine(score.pacific)}\n0ズレがドンピシャ #プロ野球`;
+        const cl = lang === "ja" ? "セ" : "CL";
+        const pl = lang === "ja" ? "パ" : "PL";
+        const tag = lang === "ja" ? "\n0ズレがドンピシャ #プロ野球" : "\n0 is exact";
+        return `${head}\n${cl} ${compactLine(score.central)}\n${pl} ${compactLine(score.pacific)}${tag}`;
       }
-      const detail = (block) => block.rows.map((row) => `${row.predicted_rank}位 ${row.name} → ${row.actual_rank}位 (${arrow(row.delta)})  ${row.penalty}ズレ`).join("\n");
-      const stamp = app.state.confirmed_label ? `最終確定: ${app.state.confirmed_label}` : "未確定の下書き";
-      return `${head}\n\n【${score.central.name}】\n${detail(score.central)}\n${score.central.name}合計: ${score.central.total}ズレ\n\n【${score.pacific.name}】\n${detail(score.pacific)}\n${score.pacific.name}合計: ${score.pacific.total}ズレ\n\n${stamp}\n0ズレがドンピシャ`;
+      const place = lang === "ja" ? "位" : "";
+      const detail = (block) => block.rows.map((row) => `${row.predicted_rank}${place} ${row.name} → ${row.actual_rank}${place} (${arrow(row.delta)})  ${missLabel(row.penalty)}`).join("\n");
+      const stamp = app.state.confirmed_label ? t("shareStamp", { label: app.state.confirmed_label }) : t("shareDraft");
+      const perfect = lang === "ja" ? "0ズレがドンピシャ" : "0 is exact";
+      return `${head}\n\n【${score.central.name}】\n${detail(score.central)}\n${t("leagueTotal", { name: score.central.name, total: score.central.total })}\n\n【${score.pacific.name}】\n${detail(score.pacific)}\n${t("leagueTotal", { name: score.pacific.name, total: score.pacific.total })}\n\n${stamp}\n${perfect}`;
     }
 
     function statusBanners() {
@@ -482,9 +1011,9 @@
       const parts = [];
       if (state.last_error) parts.push(`<p class="banner warn">${esc(state.last_error)}</p>`);
       if (state.using === "draft") {
-        parts.push(`<p class="banner info">表示中のズレは下書きのプレビューです。設定で確定すると、その順位が採点対象になります。</p>`);
+        parts.push(`<p class="banner info">${esc(t("draftBanner"))}</p>`);
       } else if (!state.locked && state.draft_differs) {
-        parts.push(`<p class="banner info">修正中です。表示中のズレは、確定済みの予想です。</p>`);
+        parts.push(`<p class="banner info">${esc(t("editBanner"))}</p>`);
       }
       return parts.join("");
     }
@@ -492,37 +1021,37 @@
     function sourceLine() {
       const standings = display().standings;
       if (!standings || !standings.source_label) return "";
-      const when = standings.fetched_label ? `取得 ${standings.fetched_label}` : "";
+      const when = standings.fetched_label ? t("fetched", { label: standings.fetched_label }) : "";
       const link = standings.source_url
         ? `<a href="${esc(standings.source_url)}" target="_blank" rel="noopener">${esc(standings.source_label)}</a>`
         : esc(standings.source_label);
-      const cross = standings.cross_check ? ` / 突合: ${esc(standings.cross_check.detail || "")}` : "";
+      const cross = standings.cross_check ? t("cross", { detail: standings.cross_check.detail || "" }) : "";
       return `<p class="source">${link}${when ? ` / ${esc(when)}` : ""}${cross}</p>`;
     }
 
     function seasonStatus(progress) {
       const start = app.state.can_start_next && !app.state.viewing_year
-        ? `<button type="button" class="btn" data-action="start-season">${esc(app.state.next_year)}年の予想を始める</button>`
+        ? `<button type="button" class="btn" data-action="start-season">${esc(t("startBtn", { year: app.state.next_year }))}</button>`
         : "";
       if (progress && progress.finished && progress.year) {
-        return `<section class="season-status${start ? " has-action" : ""}"><p>${esc(progress.year)}年レギュラーシーズン終了</p>${start}</section>`;
+        return `<section class="season-status${start ? " has-action" : ""}"><p>${esc(t("finished", { year: progress.year }))}</p>${start}</section>`;
       }
       if (progress && progress.played != null && progress.total) {
-        const when = progress.as_of ? `${jpDate(progress.as_of)}時点` : "";
+        const when = progress.as_of ? (lang === "ja" ? `${jpDate(progress.as_of)}時点　` : `As of ${jpDate(progress.as_of)} · `) : "";
         const pct = Math.max(0, Math.min(100, Math.round(progress.played / progress.total * 100)));
-        const head = `${when ? `${when}　` : ""}${progress.total}試合中${progress.played}試合終了　残り${progress.remaining}試合`;
-        return `<section class="season-status" aria-label="シーズンの進捗"><p>${esc(head)}</p><div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${pct}%"><span style="width:${pct}%"></span></div></section>`;
+        const head = t("progress", { when, total: progress.total, played: progress.played, remaining: progress.remaining });
+        return `<section class="season-status"><p>${esc(head)}</p><div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${pct}%"><span style="width:${pct}%"></span></div></section>`;
       }
       if (app.state.season_year && !app.state.standings && !app.state.viewing_year) {
-        return `<section class="season-status"><p>${esc(app.state.season_year)}年の予想</p><p class="note">開幕後に順位と試合数が入ります。</p></section>`;
+        return `<section class="season-status"><p>${esc(t("preparing", { year: app.state.season_year }))}</p><p class="note">${esc(t("preparingNote"))}</p></section>`;
       }
       return "";
     }
 
     function viewingBanner() {
       if (!app.state.viewing_year) return "";
-      const back = app.state.season_year || "いま";
-      return `<div class="banner info">${esc(app.state.viewing_year)}年の結果を表示しています。<button type="button" class="btn" data-action="view-season" data-year="">${esc(back)}年の予想に戻る</button></div>`;
+      const back = app.state.season_year || "";
+      return `<div class="banner info">${esc(t("viewingBanner", { year: app.state.viewing_year }))}<button type="button" class="btn" data-action="view-season" data-year="">${esc(t("backTo", { year: back }))}</button></div>`;
     }
 
     function resultsCard(progress, games, url) {
@@ -530,14 +1059,12 @@
       if (!list.length && !url) return "";
       const finished = progress && progress.finished;
       const today = progress && progress.as_of && progress.as_of === todayJst();
-      const title = finished ? "レギュラーシーズン最終日" : (today ? "今日の試合結果" : "直近の試合結果");
+      const title = finished ? t("finalDay") : (today ? t("todayGames") : t("recentGames"));
       const when = progress && progress.as_of ? jpDate(progress.as_of) : "";
-      const rows = list.map((game) => `<li><span class="side away">${esc(game.away)}</span><span class="score">${esc(game.away_score)}</span><span class="hyphen">-</span><span class="score">${esc(game.home_score)}</span><span class="side">${esc(game.home)}</span></li>`).join("");
-      const note = finished
-        ? "クライマックスシリーズ以降は、NPB公式のページで見られます。"
-        : "試合の詳細は、NPB公式のページで見られます。";
-      const link = url ? `<p class="note">${esc(note)} <a href="${esc(url)}" target="_blank" rel="noopener">NPB公式の試合結果</a></p>` : "";
-      const body = rows ? `<ul class="results">${rows}</ul>` : `<p class="empty">表示できる試合結果はまだありません。</p>`;
+      const rows = list.map((game) => `<li><span class="side away">${esc(sideName(game, "away"))}</span><span class="score">${esc(game.away_score)}</span><span class="hyphen">-</span><span class="score">${esc(game.home_score)}</span><span class="side">${esc(sideName(game, "home"))}</span></li>`).join("");
+      const note = finished ? t("postseason") : t("gameDetail");
+      const link = url ? `<p class="note">${esc(note)} <a href="${esc(url)}" target="_blank" rel="noopener">${esc(t("npbGames"))}</a></p>` : "";
+      const body = rows ? `<ul class="results">${rows}</ul>` : `<p class="empty">${esc(t("noGames"))}</p>`;
       return `<article class="card"><div class="card-head"><h2>${title}</h2>${when ? `<span class="note">${esc(when)}</span>` : ""}</div>${body}${link}</article>`;
     }
 
@@ -545,55 +1072,57 @@
       const attempts = display().standings && display().standings.attempts;
       if (!attempts || !attempts.length) return "";
       const items = attempts.map((item) => {
-        const mark = item.ok ? `<span class="ok">取得</span>` : `<span class="ng">失敗</span>`;
+        const mark = item.ok ? `<span class="ok">${esc(t("ok"))}</span>` : `<span class="ng">${esc(t("ng"))}</span>`;
         const detail = item.detail ? `（${esc(item.detail)}）` : "";
         const error = item.error ? ` — ${esc(item.error)}` : "";
         return `<li>${mark} ${esc(item.label)} <span class="url">${esc(item.url)}</span>${detail}${error}</li>`;
       }).join("");
-      return `<details class="log"><summary>取得ログ</summary><ul>${items}</ul></details>`;
+      return `<details class="log"><summary>${esc(t("log"))}</summary><ul>${items}</ul></details>`;
     }
 
     function hero() {
       const score = display().score;
       const total = score ? score.total : "—";
-      const closeness = !score ? "順位表を取得するとズレを計算します" : (score.total === 0 ? "ドンピシャ" : "");
-      const central = score ? `${score.central.total}<small>ズレ</small>` : "—";
-      const pacific = score ? `${score.pacific.total}<small>ズレ</small>` : "—";
+      const closeness = !score ? t("waitStandings") : (score.total === 0 ? t("perfect") : "");
+      const unit = lang === "ja" ? `<small>${esc(t("miss"))}</small>` : "";
+      const central = score ? `${score.central.total}${unit}` : "—";
+      const pacific = score ? `${score.pacific.total}${unit}` : "—";
       const basis = app.state.viewing_year
-        ? `${esc(app.state.viewing_year)}年の結果です`
+        ? t("viewingYear", { year: app.state.viewing_year })
         : app.state.using === "confirmed"
-          ? `採点対象: ${esc(app.state.confirmed_label)} の確定予想`
-          : "採点対象: 未確定の下書き";
+          ? t("basisConfirmed", { label: app.state.confirmed_label || "" })
+          : t("basisDraft");
       const shareDisabled = score ? "" : "disabled";
+      const totalUnit = lang === "ja" ? `<span>${esc(t("miss"))}</span>` : "";
       return `
         <section class="card hero">
           <div class="hero-grid">
             <div>
-              <p class="eyebrow">両リーグ合計</p>
-              <p class="score-num">${total}<span>ズレ</span></p>
+              <p class="eyebrow">${esc(t("both"))}</p>
+              <p class="score-num">${total}${totalUnit}</p>
               ${closeness ? `<p class="closeness">${esc(closeness)}</p>` : ""}
             </div>
             <div class="splits">
-              <div><span>セ・リーグ</span><strong>${central}</strong></div>
-              <div><span>パ・リーグ</span><strong>${pacific}</strong></div>
+              <div><span>${esc(t("central"))}</span><strong>${central}</strong></div>
+              <div><span>${esc(t("pacific"))}</span><strong>${pacific}</strong></div>
             </div>
             <div class="hero-actions">
-              <button type="button" class="btn btn-primary" data-action="refresh">最新順位を取得</button>
-              <button type="button" class="btn" data-action="share" ${shareDisabled}>画像をシェア</button>
-              <button type="button" class="btn" data-action="copy" ${shareDisabled}>テキストをコピー</button>
+              <button type="button" class="btn btn-primary" data-action="refresh">${esc(t("refresh"))}</button>
+              <button type="button" class="btn" data-action="share" ${shareDisabled}>${esc(t("share"))}</button>
+              <button type="button" class="btn" data-action="copy" ${shareDisabled}>${esc(t("copy"))}</button>
             </div>
           </div>
-          <p class="score-basis">${basis}</p>
+          <p class="score-basis">${esc(basis)}</p>
         </section>`;
     }
 
     function matchRow(row, rank, side) {
       const penalty = side === "actual"
-        ? `<span class="penalty ${row.penalty === 0 ? "is-zero" : "is-miss"}">${row.penalty}<span>ズレ</span></span>`
+        ? `<span class="penalty ${row.penalty === 0 ? "is-zero" : "is-miss"}">${row.penalty}${lang === "ja" ? `<span>${esc(t("miss"))}</span>` : ""}</span>`
         : "";
       const label = side === "pred"
-        ? `予想${row.predicted_rank}位 ${row.name}、現在${row.actual_rank}位、${row.penalty}ズレ`
-        : `現在${rank}位 ${row.name}、${row.penalty}ズレ`;
+        ? t("predAria", { p: row.predicted_rank, name: row.name, a: row.actual_rank, pen: row.penalty })
+        : t("actAria", { a: rank, name: row.name, pen: row.penalty });
       return `<div class="match-row" data-team="${esc(row.team)}" data-stroke="${strokeFor(row)}" aria-label="${esc(label)}">${club(row, rank, side === "actual")}${penalty}</div>`;
     }
 
@@ -607,24 +1136,24 @@
           <div class="table-wrap">
             <div class="match-board">
               <div class="match-side">
-                <div class="match-label">予想順位</div>
+                <div class="match-label">${esc(t("pred"))}</div>
                 <div class="match-col pred">${left}</div>
               </div>
               <div class="match-bridge" aria-hidden="true"></div>
               <div class="match-side">
-                <div class="match-label">現在の順位</div>
+                <div class="match-label">${esc(t("current"))}</div>
                 <div class="match-col actual">${right}</div>
               </div>
-              <svg class="match-lines" role="img" aria-label="${esc(block.name)}の予想と現在順位の対応"></svg>
+              <svg class="match-lines" role="img" aria-label="${esc(t("linesAria", { name: block.name }))}"></svg>
             </div>
           </div>
-          <p class="grand">${esc(block.name)}合計: ${block.total}ズレ</p>
+          <p class="grand">${esc(t("leagueTotal", { name: block.name, total: block.total }))}</p>
         </article>`;
     }
 
     function emptyTable(league) {
       const ids = app.state.using === "confirmed" && app.state.confirmed ? app.state.confirmed[league] : app.state.draft[league];
-      const label = league === "central" ? "セ・リーグ" : "パ・リーグ";
+      const label = t(league);
       const rows = ids.map((id, index) => {
         const team = teamById(id);
         return `<tr><td>${club(team, index + 1, true)}</td><td class="move-line">—</td><td>—</td><td class="penalty">—</td></tr>`;
@@ -645,7 +1174,7 @@
       const shown = display();
       const score = shown.score;
       const tables = score
-        ? `${tableHtml(score.central, "central")}${tableHtml(score.pacific, "pacific")}<p class="grand">両リーグ合計: ${score.total}ズレ</p>`
+        ? `${tableHtml(score.central, "central")}${tableHtml(score.pacific, "pacific")}<p class="grand">${esc(t("bothTotal", { total: score.total }))}</p>`
         : `${emptyTable("central")}${emptyTable("pacific")}`;
       return `
         <div class="stack">
@@ -662,49 +1191,52 @@
 
     function trendTable() {
       const signed = (value) => value === 0 ? "0" : `-${value}`;
-      const rows = (app.state.trend || []).map((point) => `<tr><td>${esc(point.date)}</td><td>${signed(point.total)}</td><td>${signed(point.central)}</td><td>${signed(point.pacific)}</td></tr>`).join("");
-      if (!rows) return `<p class="empty">まだ推移データがありません。</p>`;
-      return `<div class="mini-wrap"><table class="mini"><thead><tr><th>日付</th><th>合計</th><th>セ</th><th>パ</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      const rows = (display().trend || []).map((point) => `<tr><td>${esc(point.date)}</td><td>${signed(point.total)}</td><td>${signed(point.central)}</td><td>${signed(point.pacific)}</td></tr>`).join("");
+      if (!rows) return `<p class="empty">${esc(t("emptyTrend"))}</p>`;
+      return `<div class="mini-wrap"><table class="mini"><thead><tr><th>${lang === "ja" ? "日付" : "Date"}</th><th>${esc(t("total"))}</th><th>${esc(t("cl"))}</th><th>${esc(t("pl"))}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     }
 
     function graphView() {
       const trend = display().trend || [];
       const count = trend.length;
       const finished = display().standings && display().standings.season_finished;
-      const span = count ? `${shortDate(trend[0].date)}から${shortDate(trend[count - 1].date)}まで` : "";
-      const countNote = count <= 1
-        ? "まだ1日分です。順位を更新すると、開幕からの線が入ります。"
-        : `${span}の${count}日分です。`;
+      const span = count
+        ? (lang === "ja"
+          ? `${shortDate(trend[0].date)}から${shortDate(trend[count - 1].date)}まで`
+          : `${shortDate(trend[0].date)}–${shortDate(trend[count - 1].date)}`)
+        : "";
+      const countNote = count <= 1 ? t("oneDay") : t("manyDays", { span, count });
       const seriesButtons = [
-        ["total", "合計", "両リーグ合計", "#1c2430"],
-        ["central", "セ", "セ・リーグ", "#0e7a45"],
-        ["pacific", "パ", "パ・リーグ", "#1d4e89"]
-      ].map(([key, label, full, color]) => `<button type="button" data-action="series" data-series="${key}" class="${app.series[key] ? "on" : "off"}" aria-label="${full}" title="${full}"><span class="swatch" style="--c1:${color};--c2:${color}"></span>${label}</button>`).join("");
+        ["total", t("total"), t("bothFull"), "#1c2430"],
+        ["central", t("cl"), t("centralFull"), "#0e7a45"],
+        ["pacific", t("pl"), t("pacificFull"), "#1d4e89"]
+      ].map(([key, label, full, color]) => `<button type="button" data-action="series" data-series="${key}" class="${app.series[key] ? "on" : "off"}" aria-label="${esc(full)}" title="${esc(full)}"><span class="swatch" style="--c1:${color};--c2:${color}"></span>${esc(label)}</button>`).join("");
       const rankData = display().ranks && display().ranks[app.rankLeague];
       const teamButtons = rankData ? rankData.teams.map((team) => `<button type="button" data-action="solo" data-team="${team.id}" class="${app.solo === team.id ? "on" : ""}">${swatch(team.colors)}${esc(team.name)}</button>`).join("") : "";
-      const soloNote = app.solo ? `<span class="key"><span class="dash-sample"></span>点線は予想順位</span>` : "";
+      const soloNote = app.solo ? `<span class="key"><span class="dash-sample"></span>${esc(t("dash"))}</span>` : "";
+      const end = finished ? t("endFinal") : t("endLatest");
       return `
         <div class="stack">
           <article class="card">
-            <div class="card-head"><h2>予想ズレ点の推移</h2></div>
-            <p class="note">採点対象の予想について、開幕日から${finished ? "順位が確定した日" : "最新の試合日"}まで、1日ごとのズレです。試合のない日は前日の順位のままです。0が一番上で、<strong>ズレが大きいほど下のマイナスになります。</strong>${countNote}</p>
+            <div class="card-head"><h2>${esc(t("trendTitle"))}</h2></div>
+            <p class="note">${esc(t("trendBody", { end }))}<strong>${esc(t("trendBold"))}</strong>${esc(countNote)}</p>
             <div class="legend one-line">${seriesButtons}</div>
             <div class="chart" id="penalty-chart"></div>
             ${trendTable()}
           </article>
           <article class="card">
             <div class="card-head">
-              <h2>チーム順位の推移</h2>
+              <h2>${esc(t("rankTitle"))}</h2>
               <div class="segment">
-                <button type="button" data-action="rank-league" data-league="central" class="${app.rankLeague === "central" ? "on" : ""}">セ・リーグ</button>
-                <button type="button" data-action="rank-league" data-league="pacific" class="${app.rankLeague === "pacific" ? "on" : ""}">パ・リーグ</button>
+                <button type="button" data-action="rank-league" data-league="central" class="${app.rankLeague === "central" ? "on" : ""}">${esc(t("central"))}</button>
+                <button type="button" data-action="rank-league" data-league="pacific" class="${app.rankLeague === "pacific" ? "on" : ""}">${esc(t("pacific"))}</button>
               </div>
             </div>
             <div class="segment" style="margin-top:8px">
-              <button type="button" data-action="rank-span" data-span="day" class="${app.rankSpan === "day" ? "on" : ""}">日ごと</button>
-              <button type="button" data-action="rank-span" data-span="month" class="${app.rankSpan === "month" ? "on" : ""}">月ごと</button>
+              <button type="button" data-action="rank-span" data-span="day" class="${app.rankSpan === "day" ? "on" : ""}">${esc(t("daily"))}</button>
+              <button type="button" data-action="rank-span" data-span="month" class="${app.rankSpan === "month" ? "on" : ""}">${esc(t("monthly"))}</button>
             </div>
-            <p class="note">実際の順位です。上にあるほど上位です。${app.rankSpan === "month" ? "月ごとは、その月の最後の試合日の順位です。" : "日ごとは、毎日の順位です。"}チームを選ぶと、予想順位を点線で重ねます。</p>
+            <p class="note">${esc(t("rankLead"))}${esc(app.rankSpan === "month" ? t("monthHelp") : t("dayHelp"))}${esc(t("pickTeam"))}</p>
             <div class="legend">${teamButtons}${soloNote}</div>
             <div class="chart" id="rank-chart"></div>
           </article>
@@ -715,27 +1247,28 @@
       const state = app.state;
       const archives = state.archives || [];
       const items = archives.map((item) => {
-        const current = state.viewing_year === item.year ? `<span class="tag">表示中</span>` : "";
-        return `<li><span>${esc(item.year)}年の結果${current}</span><button type="button" class="btn" data-action="view-season" data-year="${esc(item.year)}">結果を見る</button></li>`;
+        const current = state.viewing_year === item.year ? `<span class="tag">${esc(t("showing"))}</span>` : "";
+        const label = lang === "ja" ? `${item.year}年の結果` : `${item.year} results`;
+        return `<li><span>${esc(label)}${current}</span><button type="button" class="btn" data-action="view-season" data-year="${esc(item.year)}">${esc(t("viewResult"))}</button></li>`;
       }).join("");
       const start = state.can_start_next
-        ? `<button type="button" class="btn btn-primary" data-action="start-season">${esc(state.next_year)}年の予想を始める</button>`
+        ? `<button type="button" class="btn btn-primary" data-action="start-season">${esc(t("startBtn", { year: state.next_year }))}</button>`
         : "";
       const back = state.viewing_year
-        ? `<button type="button" class="btn" data-action="view-season" data-year="">${esc(state.season_year)}年の予想に戻る</button>`
+        ? `<button type="button" class="btn" data-action="view-season" data-year="">${esc(t("backTo", { year: state.season_year || "" }))}</button>`
         : "";
-      let lead = "シーズンの結果は、まだありません。";
-      if (state.viewing_year) lead = `${state.viewing_year}年の結果を表示しています。順位の編集は${state.season_year}年の予想です。`;
-      else if (state.season_year && !state.standings) lead = `${state.season_year}年の予想を編集しています。順位表は開幕後に入ります。`;
-      else if (state.standings && state.standings.season_finished) lead = `${state.standings.season}年の結果を表示しています。次の年の予想は、開幕前の好きなときに始められます。`;
-      else if (state.standings && state.standings.season) lead = `${state.standings.season}年の予想を表示しています。`;
+      let lead = t("leadNone");
+      if (state.viewing_year) lead = t("leadView", { view: state.viewing_year, edit: state.season_year || "" });
+      else if (state.season_year && !state.standings) lead = t("leadNext", { year: state.season_year });
+      else if (state.standings && state.standings.season_finished) lead = t("leadFinished", { year: state.standings.season });
+      else if (state.standings && state.standings.season) lead = t("leadCurrent", { year: state.standings.season });
       const note = state.can_start_next
-        ? `<p class="note">始めると、ホームは${esc(state.next_year)}年の下書きになります。${esc(state.standings.season)}年のズレとグラフは、ここに残ります。</p>`
+        ? `<p class="note">${esc(t("startNote", { next: state.next_year, year: state.standings.season }))}</p>`
         : "";
       const list = items ? `<ul class="season-list">${items}</ul>` : "";
       return `
         <article class="card">
-          <h2>シーズン</h2>
+          <h2>${esc(t("season"))}</h2>
           <p class="score-basis">${esc(lead)}</p>
           ${note}
           <div class="actions" style="margin-top:12px">${start}${back}</div>
@@ -747,62 +1280,68 @@
       const locked = app.state.locked;
       const seen = preview();
       const score = app.state.score;
-      let previewText = "順位表を取得すると、この並びのズレをプレビューできます。";
-      if (seen && locked && score) previewText = `確定中のズレは ${score.total} です（セ ${score.central.total} / パ ${score.pacific.total}）。`;
-      else if (seen && app.state.confirmed && app.state.draft_differs && score) previewText = `修正中の並びは ${seen.total}ズレです。確定中のズレは ${score.total} です。`;
-      else if (seen) previewText = `この並びを確定すると、現在の順位とのズレは ${seen.total} です（セ ${seen.central} / パ ${seen.pacific}）。`;
-      const confirmLabel = !app.state.confirmed ? "この順位で確定する" : (locked ? "確定済み" : "更新して確定する");
+      let previewText = t("previewEmpty");
+      if (seen && locked && score) previewText = t("previewLocked", { total: score.total, c: score.central.total, p: score.pacific.total });
+      else if (seen && app.state.confirmed && app.state.draft_differs && score) previewText = t("previewEditing", { seen: seen.total, total: score.total });
+      else if (seen) previewText = t("previewDraft", { total: seen.total, c: seen.central, p: seen.pacific });
+      const confirmLabel = !app.state.confirmed ? t("confirmNew") : (locked ? t("confirmedBtn") : t("confirmUpdate"));
       const extra = app.state.confirmed
         ? (locked
-          ? `<button type="button" class="btn" data-action="unlock">修正する</button>`
-          : `<button type="button" class="btn" data-action="cancel-edit">修正をやめる</button>`)
+          ? `<button type="button" class="btn" data-action="unlock">${esc(t("unlock"))}</button>`
+          : `<button type="button" class="btn" data-action="cancel-edit">${esc(t("cancelEdit"))}</button>`)
         : "";
       const resetDisabled = locked ? "disabled" : "";
       const confirmDisabled = locked ? "disabled" : "";
       return `
         <div class="stack">
+          <article class="card">
+            <h2>${esc(t("language"))}</h2>
+            <div class="segment" style="margin-top:8px">
+              <button type="button" data-action="lang" data-lang="ja" class="${lang === "ja" ? "on" : ""}">日本語</button>
+              <button type="button" data-action="lang" data-lang="en" class="${lang === "en" ? "on" : ""}">English</button>
+            </div>
+          </article>
           ${seasonCard()}
           <article class="card">
-            <div class="card-head"><h2>予想順位</h2><span class="note">${esc(stampLine())}</span></div>
-            <p class="note">行をドラッグするか、↑↓で並べます。スマホでは左の点を押さえて動かします。確定中は「修正する」を押してからです。各チームの |予想順位 − 実際の順位| を合計し、0ズレがドンピシャです。</p>
+            <div class="card-head"><h2>${esc(t("predHeading"))}</h2><span class="note">${esc(stampLine())}</span></div>
+            <p class="note">${esc(t("dragNote"))}</p>
             <p class="score-basis">${esc(previewText)}</p>
             <div class="actions" style="margin-top:12px">
-              <button type="button" class="btn btn-primary" data-action="confirm" ${confirmDisabled}>${confirmLabel}</button>
+              <button type="button" class="btn btn-primary" data-action="confirm" ${confirmDisabled}>${esc(confirmLabel)}</button>
               ${extra}
-              <button type="button" class="btn" data-action="reset-draft" ${resetDisabled}>初期順に戻す</button>
+              <button type="button" class="btn" data-action="reset-draft" ${resetDisabled}>${esc(t("reset"))}</button>
             </div>
           </article>
           <div class="boards">
-            ${board("central", "セ・リーグ")}
-            ${board("pacific", "パ・リーグ")}
+            ${board("central", t("central"))}
+            ${board("pacific", t("pacific"))}
           </div>
           <article class="card">
-            <h2>変更履歴</h2>
+            <h2>${esc(t("history"))}</h2>
             ${historyHtml()}
           </article>
           <article class="card">
-            <h2>データ</h2>
-            <p class="note">ログインはありません。機種を変えるときは、予想データを書き出して、新しい端末で読み込んでください。</p>
+            <h2>${esc(t("data"))}</h2>
             <div class="actions" style="margin-top:12px">
-              <button type="button" class="btn" data-action="export">データを書き出す</button>
-              <button type="button" class="btn" data-action="import">データを読み込む</button>
-              <button type="button" class="btn" data-action="delete-data">予想データを消す</button>
+              <button type="button" class="btn" data-action="export">${esc(t("exportBtn"))}</button>
+              <button type="button" class="btn" data-action="import">${esc(t("importBtn"))}</button>
+              <button type="button" class="btn" data-action="delete-data">${esc(t("deleteBtn"))}</button>
             </div>
           </article>
           <article class="card">
-            <h2>サポート</h2>
-            <p class="note"><a href="https://harunaka726-coder.github.io/npb-pennant-penalty/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a></p>
-            <p class="note"><a href="https://forms.gle/3YbhA78mqjRDVS4n6" target="_blank" rel="noopener">お問い合わせ</a></p>
+            <h2>${esc(t("support"))}</h2>
+            <p class="note"><a data-privacy href="${privacyUrl()}" target="_blank" rel="noopener">${esc(t("privacy"))}</a></p>
+            <p class="note"><a href="https://forms.gle/3YbhA78mqjRDVS4n6" target="_blank" rel="noopener">${esc(t("contact"))}</a></p>
           </article>
         </div>`;
     }
 
     function stampLine() {
-      if (!app.state.confirmed_label) return "まだ確定していません";
+      if (!app.state.confirmed_label) return t("notConfirmed");
       if (app.state.first_confirmed_label && app.state.first_confirmed_label !== app.state.confirmed_label) {
-        return `初回確定: ${app.state.first_confirmed_label} / 最終確定: ${app.state.confirmed_label}`;
+        return t("firstFinal", { first: app.state.first_confirmed_label, last: app.state.confirmed_label });
       }
-      return `最終確定: ${app.state.confirmed_label}`;
+      return t("finalOnly", { last: app.state.confirmed_label });
     }
 
     function board(league, label) {
@@ -818,10 +1357,10 @@
             <span class="pos">${index + 1}</span>
             <span class="grip" aria-hidden="true"></span>
             ${swatch(team.colors)}
-            <span class="tname" title="${esc(team.full_name)}">${esc(team.name)}</span>
+            <span class="tname" title="${esc(team.full_name)}">${esc(displayName(team))}</span>
             <span style="flex:1"></span>
-            <button type="button" class="btn icon-btn" data-action="move" data-league="${league}" data-index="${index}" data-dir="-1" ${up} aria-label="${esc(team.name)}を上へ">↑</button>
-            <button type="button" class="btn icon-btn" data-action="move" data-league="${league}" data-index="${index}" data-dir="1" ${down} aria-label="${esc(team.name)}を下へ">↓</button>
+            <button type="button" class="btn icon-btn" data-action="move" data-league="${league}" data-index="${index}" data-dir="-1" ${up} aria-label="${esc(t("ariaUp", { name: displayName(team) }))}">↑</button>
+            <button type="button" class="btn icon-btn" data-action="move" data-league="${league}" data-index="${index}" data-dir="1" ${down} aria-label="${esc(t("ariaDown", { name: displayName(team) }))}">↓</button>
           </div>`;
       }).join("");
       return `<article class="card league-${league}"><h2>${label}</h2>${rows}</article>`;
@@ -829,16 +1368,17 @@
 
     function historyHtml() {
       const items = app.state.history || [];
-      if (!items.length) return `<p class="empty">確定すると、ここに履歴が残ります。</p>`;
+      if (!items.length) return `<p class="empty">${esc(t("historyEmpty"))}</p>`;
       return `<ul class="history">${items.map((item) => `
         <li>
-          <time>${esc(item.label)}</time><span class="tag">${esc(item.action)}</span>
-          <p class="note">セ ${esc(item.central.map((id) => teamById(id).name).join(" › "))}</p>
-          <p class="note">パ ${esc(item.pacific.map((id) => teamById(id).name).join(" › "))}</p>
+          <time>${esc(item.label)}</time><span class="tag">${esc(actionLabel(item.action))}</span>
+          <p class="note">${esc(t("cl"))} ${esc(item.central.map((id) => displayName(teamById(id))).join(" › "))}</p>
+          <p class="note">${esc(t("pl"))} ${esc(item.pacific.map((id) => displayName(teamById(id))).join(" › "))}</p>
         </li>`).join("")}</ul>`;
     }
 
     function render(y) {
+      applyChrome();
       document.getElementById("app").innerHTML = `
         <section class="view" data-view="home">${homeView()}</section>
         <section class="view" data-view="graph">${graphView()}</section>
@@ -987,9 +1527,9 @@
         yMax: 0,
         reverse: false,
         ticks,
-        tickUnit: "ズレ",
-        label: "ズレ点の推移",
-        empty: "まだ推移データがありません。順位を取得すると、その日の点が残ります。"
+        tickUnit: t("miss"),
+        label: t("chartPenalty"),
+        empty: t("emptyTrendChart")
       });
       const data = display().ranks && display().ranks[app.rankLeague];
       let dates = data ? data.dates : [];
@@ -1011,9 +1551,9 @@
         yMax: 6,
         reverse: true,
         ticks: [1, 2, 3, 4, 5, 6],
-        formatTick: (value) => `${value}位`,
-        label: "チーム順位の推移",
-        empty: "順位の記録がまだありません。"
+        formatTick: (value) => lang === "ja" ? `${value}位` : String(value),
+        label: t("chartRank"),
+        empty: t("emptyRank")
       });
     }
 
@@ -1029,15 +1569,123 @@
     }
 
     function commitLineup(next) {
-      if (!next || app.state.locked) return;
-      app.state.draft = next;
-      render(window.scrollY);
-      const snapshot = { central: next.central.slice(), pacific: next.pacific.slice() };
-      const rev = ++draftRev;
-      enqueue(async () => {
-        const data = await postJson("/api/draft", snapshot);
-        if (data && data.teams && (data.error || rev === draftRev)) applyState(data);
-      });
+      if (!next || !app.user || app.user.locked) return;
+      app.user.draft = next;
+      saveUser(app.user);
+      paint();
+    }
+
+    function confirmOrder() {
+      const user = app.user;
+      if (!user || user.locked) return;
+      const lineup = { central: user.draft.central.slice(), pacific: user.draft.pacific.slice() };
+      if (user.confirmed && sameOrder(user.confirmed, lineup)) {
+        user.locked = true;
+        saveUser(user);
+        paint("sameOrder");
+        return;
+      }
+      const label = nowLabel();
+      const action = user.confirmed ? "update" : "confirm";
+      user.confirmed = {
+        central: lineup.central.slice(),
+        pacific: lineup.pacific.slice(),
+        confirmed_at: user.confirmed ? user.confirmed.confirmed_at : label,
+        confirmed_label: user.confirmed ? user.confirmed.confirmed_label : label,
+        updated_at: label,
+        updated_label: label
+      };
+      user.locked = true;
+      user.history.push({ label, action, central: lineup.central.slice(), pacific: lineup.pacific.slice() });
+      saveUser(user);
+      paint(action === "update" ? "didUpdate" : "didConfirm", { label });
+    }
+
+    function unlockOrder() {
+      if (!app.user || !app.user.confirmed) {
+        paint("noConfirm");
+        return;
+      }
+      app.user.locked = false;
+      saveUser(app.user);
+      paint("unlocked");
+    }
+
+    function cancelEdit() {
+      const user = app.user;
+      if (!user || !user.confirmed) {
+        paint("noConfirm");
+        return;
+      }
+      user.draft = { central: user.confirmed.central.slice(), pacific: user.confirmed.pacific.slice() };
+      user.locked = true;
+      saveUser(user);
+      paint("canceled");
+    }
+
+    function resetDraft() {
+      if (!app.user || app.user.locked) return;
+      app.user.draft = defaultUser().draft;
+      saveUser(app.user);
+      paint("resetDone");
+    }
+
+    function startSeason() {
+      const standings = app.public && app.public.standings;
+      if (!app.state.can_start_next || !standings) {
+        paint("startTooEarly");
+        return;
+      }
+      const year = Number(standings.season);
+      const user = app.user;
+      const archive = {
+        year,
+        archived_label: nowLabel(),
+        prediction: activePrediction(user),
+        standings: {
+          central: standings.central.slice(),
+          pacific: standings.pacific.slice(),
+          season: standings.season,
+          season_finished: true,
+          source_label: standings.source_label,
+          source_url: standings.source_url,
+          fetched_label: standings.fetched_label
+        },
+        snapshots: (app.public.snapshots || []).map((snap) => ({ date: snap.date, central: snap.central, pacific: snap.pacific })),
+        progress: app.public.progress,
+        recent_games: app.public.recent_games || [],
+        games_url: app.public.games_url
+      };
+      user.archives = (user.archives || []).filter((item) => item.year !== year);
+      user.archives.push(archive);
+      user.season_year = year + 1;
+      user.view_year = null;
+      user.draft = defaultUser().draft;
+      user.confirmed = null;
+      user.locked = false;
+      user.history = [];
+      saveUser(user);
+      paint("started", { year: year + 1, prev: year });
+    }
+
+    function viewSeason(year) {
+      const user = app.user;
+      if (!year) {
+        user.view_year = null;
+        saveUser(user);
+        paint("backNotice");
+        return;
+      }
+      const found = Number(year);
+      if (!user.archives.some((item) => item.year === found)) return;
+      user.view_year = found;
+      saveUser(user);
+      paint("viewingNotice", { year: found });
+    }
+
+    function deleteLocalData() {
+      saveUser(defaultUser());
+      paint("deleted");
     }
 
     function onClick(event) {
@@ -1054,12 +1702,14 @@
         shareBoard();
       } else if (action === "copy") {
         copyText();
-      } else if (action === "confirm" || action === "unlock" || action === "cancel-edit" || action === "reset-draft") {
-        const path = { confirm: "/api/confirm", unlock: "/api/unlock", "cancel-edit": "/api/cancel-edit", "reset-draft": "/api/draft/reset" }[action];
-        enqueue(async () => {
-          const data = await postJson(path);
-          if (data && data.teams) applyState(data);
-        });
+      } else if (action === "confirm") {
+        confirmOrder();
+      } else if (action === "unlock") {
+        unlockOrder();
+      } else if (action === "cancel-edit") {
+        cancelEdit();
+      } else if (action === "reset-draft") {
+        resetDraft();
       } else if (action === "move") {
         commitLineup(reorder(app.state.draft, button.dataset.league, Number(button.dataset.index), Number(button.dataset.index) + Number(button.dataset.dir)));
       } else if (action === "rank-league") {
@@ -1075,27 +1725,19 @@
       } else if (action === "start-season") {
         const year = app.state.next_year;
         const prev = (app.state.standings && app.state.standings.season) || (year - 1);
-        if (!window.confirm(`${year}年の予想を始めます。\n${prev}年のズレとグラフは履歴に残ります。ホームは${year}年の下書きに切り替わります。`)) return;
-        enqueue(async () => {
-          const data = await postJson("/api/season/start");
-          if (data && data.teams) applyState(data);
-        });
+        if (!window.confirm(t("startAsk", { year, prev }))) return;
+        startSeason();
       } else if (action === "view-season") {
-        const year = button.dataset.year;
-        enqueue(async () => {
-          const data = await postJson("/api/season/view", year ? { year: Number(year) } : { year: null });
-          if (data && data.teams) applyState(data);
-        });
+        viewSeason(button.dataset.year);
+      } else if (action === "lang") {
+        setLang(button.dataset.lang);
       } else if (action === "export") {
         exportData();
       } else if (action === "import") {
         document.getElementById("import-file").click();
       } else if (action === "delete-data") {
-        if (!window.confirm("予想、確定、変更履歴、過去シーズンの記録を消します。順位表は残ります。")) return;
-        enqueue(async () => {
-          const data = await postJson("/api/data/delete");
-          if (data && data.teams) applyState(data);
-        });
+        if (!window.confirm(t("deleteAsk"))) return;
+        deleteLocalData();
       } else if (action === "series") {
         const key = button.dataset.series;
         app.series[key] = !app.series[key];
@@ -1132,7 +1774,7 @@
       ctx.fillRect(0, 0, width, height);
       ctx.fillStyle = "#1b2430";
       ctx.font = `700 22px ${font}`;
-      ctx.fillText("プロ野球順位予想　ペナントペナルティ", 28, 46);
+      ctx.fillText(t("appTitle"), 28, 46);
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#e3e7ee";
       ctx.beginPath();
@@ -1141,21 +1783,21 @@
       ctx.stroke();
       ctx.fillStyle = "#5e6a7a";
       ctx.font = `700 13px ${font}`;
-      ctx.fillText("両リーグ合計", 48, 90);
+      ctx.fillText(t("both"), 48, 90);
       ctx.fillStyle = "#1b2430";
       ctx.font = `700 40px ${font}`;
       ctx.fillText(String(score.total), 48, 136);
       const totalW = ctx.measureText(String(score.total)).width;
       ctx.font = `700 16px ${font}`;
-      ctx.fillText("ズレ", 54 + totalW, 136);
+      if (lang === "ja") ctx.fillText(t("miss"), 54 + totalW, 136);
       ctx.font = `700 16px ${font}`;
       ctx.fillStyle = "#5e6a7a";
-      ctx.fillText("セ", 250, 108);
-      ctx.fillText("パ", 360, 108);
+      ctx.fillText(t("cl"), 250, 108);
+      ctx.fillText(t("pl"), 360, 108);
       ctx.fillStyle = "#1b2430";
       ctx.font = `700 24px ${font}`;
-      ctx.fillText(`${score.central.total}ズレ`, 250, 138);
-      ctx.fillText(`${score.pacific.total}ズレ`, 360, 138);
+      ctx.fillText(missLabel(score.central.total), 250, 138);
+      ctx.fillText(missLabel(score.pacific.total), 360, 138);
 
       const drawLeague = (block, top, accent) => {
         const x = 28;
@@ -1174,7 +1816,7 @@
         ctx.font = `650 16px ${font}`;
         const nameW = Math.max(...block.rows.map((row) => ctx.measureText(row.name).width));
         ctx.font = `700 16px ${font}`;
-        const penW = Math.max(...block.rows.map((row) => ctx.measureText(`${row.penalty}ズレ`).width));
+        const penW = Math.max(...block.rows.map((row) => ctx.measureText(missLabel(row.penalty)).width));
         const rightW = 22 + 8 + 28 + 8 + nameW + 22 + penW;
         const rightX = x + w - 20 - rightW;
         const leftX = x + 20;
@@ -1232,13 +1874,13 @@
           ctx.fillText(row.name, rightX + 22 + 8 + 28 + 8, cy + 6);
           ctx.fillStyle = row.penalty === 0 ? "#0e7a45" : "#9a3412";
           ctx.font = `700 16px ${font}`;
-          ctx.fillText(`${row.penalty}ズレ`, x + w - 20, cy + 6);
+          ctx.fillText(missLabel(row.penalty), x + w - 20, cy + 6);
           ctx.textAlign = "left";
         });
         ctx.fillStyle = "#1b2430";
         ctx.font = `700 14px ${font}`;
         ctx.textAlign = "right";
-        ctx.fillText(`${block.name}合計: ${block.total}ズレ`, x + w - 20, top + leagueH - 12);
+        ctx.fillText(t("leagueTotal", { name: block.name, total: block.total }), x + w - 20, top + leagueH - 12);
         ctx.textAlign = "left";
       };
       drawLeague(score.central, 180, "#0e7a45");
@@ -1252,14 +1894,14 @@
       const canvas = renderShareCanvas();
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
       if (!blob) {
-        toast("画像を作れませんでした");
+        toast(t("imageFail"));
         return;
       }
       const file = new File([blob], "pennant-penalty.png", { type: "image/png" });
-      const text = `合計${score.total}ズレ（セ${score.central.total}/パ${score.pacific.total}）`;
+      const text = t("shareHead", { mark: "", total: score.total, c: score.central.total, p: score.pacific.total });
       try {
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: "プロ野球順位予想　ペナントペナルティ", text });
+          await navigator.share({ files: [file], title: t("appTitle"), text });
           return;
         }
       } catch (err) {
@@ -1271,7 +1913,7 @@
       link.download = "pennant-penalty.png";
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast("画像を保存しました。そこからLINEやメールで送れます。");
+      toast(t("imageSaved"));
     }
 
     async function copyText() {
@@ -1286,7 +1928,7 @@
         document.execCommand("copy");
         area.remove();
       }
-      toast("共有テキストをコピーしました");
+      toast(t("copyDone"));
     }
 
     function onPointerDown(event) {
@@ -1339,15 +1981,26 @@
     }
 
     async function exportData() {
-      const res = await fetch("/api/export");
-      const data = await res.json();
+      const user = app.user || defaultUser();
+      const data = {
+        format: "pennant-penalty",
+        version: 1,
+        exported_label: nowLabel(),
+        draft: user.draft,
+        confirmed: user.confirmed,
+        locked: user.locked,
+        history: user.history,
+        archives: user.archives,
+        season_year: user.season_year,
+        view_year: user.view_year
+      };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = "pennant-penalty-backup.json";
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      toast("バックアップを保存しました");
+      toast(t("exported"));
     }
 
     async function importFile(file) {
@@ -1355,12 +2008,16 @@
       try {
         data = JSON.parse(await file.text());
       } catch (err) {
-        toast("JSONファイルとして読めませんでした");
+        toast(t("jsonBad"));
         return;
       }
-      if (!window.confirm("いまの予想を、選んだファイルの内容に置き換えます。")) return;
-      const saved = await postJson("/api/import", data);
-      if (saved && saved.teams) applyState(saved);
+      if (!data || data.format !== "pennant-penalty") {
+        toast(t("importBad"));
+        return;
+      }
+      if (!window.confirm(t("importAsk"))) return;
+      saveUser(repairUser(data));
+      paint("imported");
     }
 
     function bind() {
@@ -1381,21 +2038,45 @@
       });
     }
 
+    async function finishMigration() {
+      await fetch("/api/data/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      if (app.public && app.public.standings) return;
+      const fresh = await postJson("/api/refresh");
+      if (fresh && fresh.teams) {
+        app.public = fresh;
+        app.user = loadUser() || defaultUser();
+        app.state = compose();
+        render(window.scrollY);
+      }
+    }
+
     async function boot() {
       bind();
+      applyChrome();
+      mountAd();
       if (!location.hash) history.replaceState(null, "", "#home");
       try {
         const res = await fetch("/api/dashboard");
         const data = await res.json();
-        if (!data.standings || data.stale) {
-          document.getElementById("app").innerHTML = `<p class="loading">NPBの順位表を取得しています…</p>`;
+        const viewingSaved = (() => {
+          try {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+            return Boolean(saved && saved.view_year);
+          } catch (err) {
+            return false;
+          }
+        })();
+        let payload = data;
+        if ((!data.standings || data.stale) && !viewingSaved) {
+          document.getElementById("app").innerHTML = `<p class="loading">${esc(t("fetching"))}</p>`;
           const fresh = await postJson("/api/refresh");
-          applyState(fresh && fresh.teams ? fresh : data);
-        } else {
-          applyState(data);
+          if (fresh && fresh.teams) payload = fresh;
         }
+        const shouldMove = !localStorage.getItem(STORAGE_KEY) && Boolean(payload.legacy_user);
+        applyState(payload);
+        if (shouldMove) await finishMigration();
       } catch (err) {
-        document.getElementById("app").innerHTML = `<p class="banner warn">サーバーに接続できません。python app.py で起動しているか確認してください。</p>`;
+        document.getElementById("app").innerHTML = `<p class="banner warn">${esc(t("offline"))}</p>`;
       }
     }
 

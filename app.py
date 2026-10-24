@@ -257,9 +257,11 @@ def _public_games(games: list[dict]) -> list[dict]:
         rows.append(
             {
                 "date": game.get("date"),
-                "away": away["name"],
-                "away_score": game.get("sa"),
-                "home": home["name"],
+            "away_id": game.get("a"),
+            "away": away["name"],
+            "away_score": game.get("sa"),
+            "home_id": game.get("b"),
+            "home": home["name"],
                 "home_score": game.get("sb"),
             }
         )
@@ -384,6 +386,8 @@ def public_state(state: dict | None = None) -> dict:
         "recent_games": recent,
         "games_url": _games_url((progress or {}).get("year") or active_year, (progress or {}).get("as_of")),
         "archive_view": archive_view,
+        "snapshots": _public_snapshots(state),
+        "legacy_user": export_payload(state) if _has_personal_data(state) else None,
     }
 
 
@@ -510,6 +514,7 @@ def refresh():
         if active_year and year and int(year) != int(active_year):
             payload = public_state(state)
             payload["notice"] = f"{int(active_year)}年の順位表は、まだ公開されていません。"
+            payload["notice_code"] = "standingsNotYet"
             return jsonify(payload)
         keep_history = _history_ready(state, year)
         cached = list(state.get("season_games") or []) if state.get("season_games_year") == year else []
@@ -695,6 +700,22 @@ def view_season():
         payload = public_state(state)
     payload["notice"] = notice
     return jsonify(payload)
+
+
+def _has_personal_data(state: dict) -> bool:
+    if state.get("confirmed") or state.get("history") or state.get("archives") or state.get("season_year") or state.get("view_year"):
+        return True
+    draft = state.get("draft") or {}
+    return draft.get("central") != list(npb_core.DEFAULT_DRAFT["central"]) or draft.get("pacific") != list(npb_core.DEFAULT_DRAFT["pacific"])
+
+
+def _public_snapshots(state: dict) -> list[dict]:
+    rows = []
+    for snap in state.get("snapshots") or []:
+        if not isinstance(snap, dict):
+            continue
+        rows.append({"date": snap.get("date"), "central": snap.get("central"), "pacific": snap.get("pacific")})
+    return rows
 
 
 def export_payload(state: dict) -> dict:

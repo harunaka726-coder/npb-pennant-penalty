@@ -17,7 +17,7 @@
 </head>
 <body>
   <main>
-    <article>
+    <article id="policy-ja">
       <h1>プライバシーポリシー</h1>
       <p class="updated">プロ野球順位予想　ペナントペナルティ<br>制定日: 2026年10月25日</p>
       <p>このポリシーは、アプリ「プロ野球順位予想　ペナントペナルティ」（以下「本アプリ」）が扱う情報について説明します。本アプリはアカウント登録なしで使い、画面下部に広告を掲載します。</p>
@@ -53,11 +53,11 @@
       </ul>
 
       <h2>保存場所</h2>
-      <p>予想データは、本アプリを動かしている環境に保存します。利用者ごとのログイン用アカウントは作りません。Google Play で配布する版では、各端末のアプリ内に保存します。</p>
-      <p>機種を変えるときは、設定の「データを書き出す」でファイルを保存し、新しい端末の「データを読み込む」で戻します。</p>
+      <p>予想データは、使っている端末の中だけに保存します。サーバー上の共有ファイルや、利用者ごとのログイン用アカウントには保存しません。</p>
+      <p>機種を変えるときは、設定の「データを書き出す」でファイルを保存し、新しい端末の「データを読み込む」で戻します。書き出していない予想は、その端末の中にだけ残ります。</p>
 
       <h2>削除</h2>
-      <p>設定の「予想データを消す」で、その環境に保存された予想、確定、変更履歴、過去シーズンの記録を削除できます。公開されている順位表のキャッシュは、個人の予想ではないため残ります。</p>
+      <p>設定の「予想データを消す」で、その端末に保存された予想、確定、変更履歴、過去シーズンの記録を削除できます。公開されている順位表のキャッシュは、個人の予想ではないため残ります。</p>
       <p>アカウントは作成しないため、アカウント削除の手続きはありません。広告配信事業者が持つ広告IDなどの情報は、各事業者の手続き、または端末の広告設定からリセットできます。</p>
 
       <h2>第三者への提供</h2>
@@ -72,6 +72,62 @@
       <h2>お問い合わせ</h2>
       <p>このポリシーについての連絡は、<a href="https://forms.gle/3YbhA78mqjRDVS4n6">お問い合わせフォーム</a>からお願いします。</p>
     </article>
+    <article id="policy-en" hidden>
+      <h1>Privacy policy</h1>
+      <p class="updated">Pennant Penalty<br>Effective: October 25, 2026</p>
+      <p>This policy explains the information handled by the app Pennant Penalty. The app does not use accounts. An ad slot sits at the bottom of the screen.</p>
+      <h2>Operator</h2>
+      <p>Questions go through this form.</p>
+      <p><a href="https://forms.gle/3YbhA78mqjRDVS4n6">Contact form</a></p>
+      <h2>Information we store</h2>
+      <p>The app stores your predicted order, confirmation, history, and saved season results. It does not ask for your name, email address, or phone number.</p>
+      <p>Standings come from public pages on the official NPB site and Sportsnavi (Yahoo! Baseball). Those pages are not personal information.</p>
+      <p>If you use the contact form, what you type is delivered to the operator through Google Forms and is also covered by Google's policies.</p>
+      <h2>Ads</h2>
+      <p>The app reserves a slot at the bottom of the screen and shows ads through a service such as Google AdMob. The ad provider may automatically receive information like the following.</p>
+      <ul>
+        <li>Advertising ID</li>
+        <li>IP address</li>
+        <li>Device or browser type, OS, language, and approximate location</li>
+        <li>Information about ad views and taps</li>
+      </ul>
+      <p>That information is used to show ads, prevent fraud, measure results, and calculate ad revenue. The operator may pass it to the ad provider so the slot can be filled. The operator does not save the advertising ID in the app's own database.</p>
+      <p>Where the law requires consent, such as in the European Economic Area, a Google consent message appears before ads. Without consent, the app does not show personalized ads.</p>
+      <p>You can reset the advertising ID or turn off ad personalization from the Ads section of Android settings. Google's ad settings are also at <a href="https://adssettings.google.com/" target="_blank" rel="noopener">adssettings.google.com</a>.</p>
+      <h2>Why we use it</h2>
+      <ul>
+        <li>Saving a predicted order, scoring it, and drawing graphs</li>
+        <li>Export and import when you change phones</li>
+        <li>Showing ads and the measurement needed to run the app</li>
+        <li>Replying to questions</li>
+        <li>Checking problems</li>
+      </ul>
+      <h2>Where it is stored</h2>
+      <p>Prediction data stays on the device you are using. It is not stored in a shared server file or in a login account.</p>
+      <p>To move phones, use Export in Settings, then Import on the new phone. A prediction that was not exported remains only on that device.</p>
+      <h2>Deletion</h2>
+      <p>Delete prediction in Settings removes the prediction, confirmation, history, and saved seasons on that device. The cache of public standings is not a personal prediction, so it remains.</p>
+      <p>There is no account to delete. Advertising IDs held by an ad provider can be reset through that provider or the device's ad settings.</p>
+      <h2>Sharing</h2>
+      <p>The operator does not sell predictions except where the law requires disclosure. Google and the sites that publish standings are used for ads, the contact form, and fetching standings.</p>
+      <h2>Children</h2>
+      <p>The app is not directed at children under 13, and it does not knowingly collect personal information from them.</p>
+      <h2>Changes</h2>
+      <p>This policy may be updated. The new text applies when it is posted on this page.</p>
+      <h2>Contact</h2>
+      <p>Questions about this policy go through the <a href="https://forms.gle/3YbhA78mqjRDVS4n6">contact form</a>.</p>
+    </article>
   </main>
+  <script>
+    (function () {
+      const query = new URLSearchParams(location.search).get("lang");
+      const tags = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || "ja"];
+      const japanese = query === "ja" || (query !== "en" && tags.some((tag) => String(tag || "").toLowerCase().split("-")[0] === "ja"));
+      document.documentElement.lang = japanese ? "ja" : "en";
+      document.title = japanese ? "プライバシーポリシー | プロ野球順位予想　ペナントペナルティ" : "Privacy policy | Pennant Penalty";
+      document.getElementById("policy-ja").hidden = !japanese;
+      document.getElementById("policy-en").hidden = japanese;
+    })();
+  </script>
 </body>
 </html>
