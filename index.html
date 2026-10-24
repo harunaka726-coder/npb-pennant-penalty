@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>プロ野球順位予想　ペナントペナルティ</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --paper: #ffffff;
+      --ink: #1b2430;
+      --muted: #5e6a7a;
+      --line: #e3e7ee;
+      --accent: #1e3a5f;
+      --green: #0e7a45;
+      --warm: #9a3412;
+      --info: #eef3f9;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    }
+    * { box-sizing: border-box; }
+    html, body { max-width: 100%; overflow-x: clip; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", "Yu Gothic UI", "Yu Gothic", "Hiragino Sans", Meiryo, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    button, input { font: inherit; }
+    a { color: var(--accent); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.94);
+      border-bottom: 1px solid var(--line);
+    }
+    .bar, main { max-width: 1040px; margin: 0 auto; }
+    .bar {
+      min-height: 64px;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand { color: inherit; text-decoration: none; font-weight: 700; }
+    nav { display: flex; gap: 4px; flex-wrap: wrap; }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+    }
+    nav a.active { color: var(--ink); background: #e8eef6; font-weight: 700; }
+    main { padding: 24px 20px 72px; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .stack { display: grid; gap: 16px; min-width: 0; }
+    .stack > * { min-width: 0; max-width: 100%; }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+    .league-central { border-top: 3px solid var(--green); }
+    .league-pacific { border-top: 3px solid #1d4e89; }
+    .hero-grid, .splits, .hero-actions, .card-head, .club, .team-row, .segment, .legend, .actions {
+      display: flex;
+      align-items: center;
+    }
+    .hero-grid { justify-content: space-between; gap: 24px; align-items: end; }
+    .eyebrow, .note, .source, .closeness, .score-basis, .empty, .loading { color: var(--muted); }
+    .eyebrow { margin: 0; font-size: 13px; letter-spacing: 0.04em; }
+    .score-num {
+      margin: 4px 0;
+      font-size: 76px;
+      line-height: 0.9;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+    .score-num span, .splits small, .penalty span { font-size: 16px; font-weight: 600; margin-left: 4px; letter-spacing: 0; }
+    .closeness, .score-basis, .note, .source { margin: 8px 0 0; font-size: 13px; }
+    .splits { gap: 28px; }
+    .splits div { display: grid; gap: 2px; }
+    .splits span { color: var(--muted); font-size: 13px; }
+    .splits strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+    .hero-actions, .actions { gap: 8px; flex-wrap: wrap; }
+    .btn {
+      appearance: none;
+      border: 1px solid #d5dbe3;
+      background: #fff;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    .btn:hover { background: #f7f8fa; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #17304f; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .banner { margin: 0; padding: 12px 14px; border-radius: 10px; font-size: 14px; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+    .banner.info { background: var(--info); color: var(--accent); }
+    .banner.warn { background: #fdf2f0; color: var(--warm); }
+    .card-head { justify-content: space-between; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin: 0; }
+    .table-wrap { max-width: 100%; overflow-x: auto; }
+    table { border-collapse: collapse; }
+    .compare { width: 100%; min-width: 680px; }
+    .compare th, .compare td { padding: 12px 10px; border-bottom: 1px solid #eef1f5; text-align: left; vertical-align: middle; }
+    .compare th { font-size: 12px; color: var(--muted); font-weight: 650; }
+    .compare tfoot td { font-weight: 700; text-align: right; border-bottom: 0; }
+    .club { gap: 10px; }
+    .rank, .pos { width: 1.6em; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .swatch {
+      width: 36px; height: 18px; border-radius: 3px; flex: none;
+      background: linear-gradient(90deg, var(--c1) 50%, var(--c2) 50%);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+    }
+    .name, .tname { font-weight: 650; }
+    .move-line { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .delta.is-up { color: var(--green); font-weight: 700; }
+    .delta.is-down { color: var(--warm); font-weight: 700; }
+    .delta.is-flat { color: var(--muted); font-weight: 700; }
+    .penalty { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+    .penalty.is-zero { color: var(--green); }
+    .penalty.is-miss { color: var(--warm); }
+    .grand { margin: 0; text-align: right; font-weight: 700; }
+    .match-board {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(56px, 1fr) auto;
+      align-items: start;
+      min-width: 0;
+      width: 100%;
+    }
+    .match-side { min-width: 0; }
+    .match-board > .match-side:last-of-type { min-width: max-content; }
+    .match-label { font-size: 12px; color: var(--muted); font-weight: 700; padding: 0 8px 6px; }
+    .match-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 46px;
+      padding: 4px 8px;
+      border-bottom: 1px solid #eef1f5;
+    }
+    .match-row .club { min-width: 0; flex: 0 1 auto; }
+    .match-row .name { white-space: nowrap; }
+    .match-row .penalty { margin-left: auto; flex: none; min-width: 3.4em; text-align: right; }
+    .match-col.actual .match-row {
+      display: grid;
+      grid-template-columns: auto auto minmax(4.8em, max-content) auto;
+      column-gap: 6px;
+      justify-content: start;
+    }
+    .match-col.actual .club { display: contents; }
+    .match-col.actual .name { width: auto; min-width: 4.8em; text-align: left; }
+    .match-col.actual .penalty { margin-left: 14px; min-width: 0; }
+    .match-lines {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      grid-column: 1 / -1;
+      grid-row: 1 / -1;
+      pointer-events: none;
+    }
+    .boards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .team-row {
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-top: 8px;
+      background: #fff;
+    }
+    .team-row[data-drag] { cursor: grab; }
+    .team-row[data-drag] .grip { touch-action: none; cursor: grab; }
+    .team-row.over { background: #f3f6fb; border-color: #b7c6dc; }
+    .team-row.dragging { opacity: 0.45; }
+    .grip {
+      width: 14px; height: 18px; flex: none;
+      background-image: radial-gradient(#98a2b3 1.3px, transparent 1.4px);
+      background-size: 7px 6px;
+    }
+    .icon-btn { padding: 4px 10px; font-size: 18px; line-height: 1; }
+    .segment { gap: 0; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+    .segment button { border: 0; background: #fff; padding: 6px 12px; cursor: pointer; color: var(--muted); }
+    .segment button.on, .legend button.on { background: #e8eef6; color: var(--ink); font-weight: 700; }
+    .legend { gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
+    .legend.one-line { flex-wrap: nowrap; }
+    .legend .swatch { width: 16px; height: 10px; }
+    .legend button, .key {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 10px; cursor: pointer;
+      white-space: nowrap;
+    }
+    .legend button.off { opacity: 0.4; }
+    .key { cursor: default; }
+    .dash-sample { width: 18px; border-top: 2px dashed currentColor; }
+    .chart svg { width: 100%; height: auto; display: block; }
+    .chart text { font-size: 12px; fill: var(--muted); }
+    .chart .tick-unit { font-size: 9px; }
+    .note strong { color: var(--ink); font-weight: 700; }
+    .season-status {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+    }
+    .season-status p { margin: 0; font-weight: 700; line-height: 1.5; }
+    .season-status.has-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .season-status.has-action .btn { flex: none; padding: 6px 10px; font-size: 13px; }
+    .progress { margin-top: 8px; height: 8px; background: #e6ebf2; border-radius: 999px; overflow: hidden; }
+    .progress span { display: block; height: 100%; background: var(--accent); }
+    .results { list-style: none; margin: 12px 0 0; padding: 0; }
+    .results li {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+      gap: 6px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #eef1f5;
+    }
+    .results li:last-child { border-bottom: 0; }
+    .results .away { text-align: right; }
+    .results .score { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .results .hyphen { color: var(--muted); }
+    .season-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+    .season-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .banner .btn { margin-left: 8px; }
+    .chart .grid { stroke: #e6ebf2; }
+    .chart polyline { stroke-linejoin: round; stroke-linecap: round; }
+    .mini-wrap { max-height: 220px; overflow: auto; margin-top: 12px; }
+    .mini { width: 100%; font-variant-numeric: tabular-nums; }
+    .mini th, .mini td { padding: 6px 8px; border-bottom: 1px solid #eef1f5; text-align: right; }
+    .mini th:first-child, .mini td:first-child { text-align: left; }
+    .history { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+    .history li { border-top: 1px solid var(--line); padding-top: 12px; }
+    .tag { display: inline-block; margin-left: 8px; font-size: 12px; color: var(--accent); background: var(--info); border-radius: 999px; padding: 2px 8px; }
+    .log { margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .log ul { padding-left: 18px; }
+    .log .url { color: #8b95a3; }
+    .ok { color: var(--green); }
+    .ng { color: var(--warm); }
+    .loading, .empty { padding: 28px 8px; }
+    #toast {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(12px);
+      background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 8px;
+      opacity: 0; pointer-events: none; transition: opacity 160ms ease;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    @media (max-width: 800px) {
+      .hero-grid, .boards { display: grid; grid-template-columns: 1fr; align-items: start; }
+      .hero-grid { gap: 16px; }
+      .score-num { font-size: 64px; }
+      .card-head, .hero-actions, .actions { flex-wrap: wrap; }
+      .banner, .note, .source, .score-basis { overflow-wrap: anywhere; }
+    }
+    @media (max-width: 640px) {
+      body { font-size: 14px; }
+      .bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        min-height: 0;
+        padding: 10px 12px 8px;
+      }
+      .brand { font-size: 15px; line-height: 1.35; }
+      nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+      nav a { text-align: center; padding: 8px 4px; }
+      main { padding: 12px 12px 56px; }
+      .card { padding: 14px 12px; }
+      .stack { gap: 12px; }
+      .score-num { font-size: 56px; }
+      .splits { width: 100%; justify-content: flex-start; gap: 20px; }
+      .splits strong { font-size: 24px; }
+      .hero-actions { width: 100%; }
+      .hero-actions .btn { flex: 1 1 calc(50% - 8px); text-align: center; padding: 10px 8px; }
+      .hero-actions .btn-primary { flex: 1 1 100%; }
+      .match-board { grid-template-columns: auto minmax(40px, 1fr) auto; }
+      .table-wrap { overflow-x: clip; }
+      .match-label { padding: 0 0 6px; font-size: 11px; }
+      .match-row { gap: 4px; min-height: 44px; padding: 4px 0; }
+      .match-row .club { gap: 4px; flex: 0 1 auto; }
+      .match-row .rank { width: auto; font-size: 12px; }
+      .match-row .swatch { width: 16px; height: 10px; }
+      .match-row .name { min-width: 0; font-size: 12px; }
+      .match-col.actual .match-row { grid-template-columns: auto auto minmax(4.6em, max-content) auto; column-gap: 4px; }
+      .match-col.actual .name { min-width: 4.6em; text-align: left; }
+      .match-row .penalty { margin-left: auto; min-width: 3em; font-size: 12px; }
+      .match-col.actual .penalty { margin-left: 12px; min-width: 0; }
+      .match-row .penalty span { font-size: 10px; margin-left: 1px; }
+      .icon-btn { min-width: 40px; min-height: 36px; }
+      .grand { font-size: 14px; }
+      .team-row { gap: 6px; }
+      .log .url { overflow-wrap: anywhere; }
+      .compare { min-width: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <a class="brand" href="#home">プロ野球順位予想　ペナントペナルティ</a>
+      <nav>
+        <a href="#home" data-route="home">ホーム</a>
+        <a href="#graph" data-route="graph">グラフ</a>
+        <a href="#settings" data-route="settings">設定</a>
+      </nav>
+    </div>
+  </header>
+  <main id="app"><p class="loading">読み込み中…</p></main>
+  <div id="toast" role="status"></div>
+  <script>
+    const app = {
+      state: null,
+      series: { total: true, central: true, pacific: true },
+      rankLeague: "central",
+      rankSpan: "month",
+      solo: null
+    };
+    let draftRev = 0;
+    let chain = Promise.resolve();
+    let drag = null;
+    let toastTimer = 0;
+
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    function enqueue(fn) {
+      chain = chain.then(fn, fn);
+      return chain;
+    }
+
+    function toast(message) {
+      const el = document.getElementById("toast");
+      el.textContent = message;
+      el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
+    }
+
+    async function postJson(url, body) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {})
+      });
+      const data = await res.json();
+      if (!res.ok) toast(data.error || "保存できませんでした");
+      return data;
+    }
+
+    function applyState(data) {
+      const y = window.scrollY;
+      app.state = data;
+      render(y);
+      if (data.notice) toast(data.notice);
+    }
+
+    function teamById(id) {
+      return (app.state.teams || []).find((team) => team.id === id) || { id, name: id, full_name: id, colors: ["#ccc", "#111"], stroke: "#555" };
+    }
+
+    function arrow(delta) {
+      if (delta > 0) return `↓${delta}`;
+      if (delta < 0) return `↑${Math.abs(delta)}`;
+      return "→";
+    }
+
+    function deltaClass(delta) {
+      if (delta > 0) return "is-down";
+      if (delta < 0) return "is-up";
+      return "is-flat";
+    }
+
+    function swatch(colors) {
+      return `<span class="swatch" style="--c1:${colors[0]};--c2:${colors[1]}"></span>`;
+    }
+
+    function club(row, rank, withName) {
+      const name = withName ? `<span class="name" title="${esc(row.full_name)}">${esc(row.name)}</span>` : "";
+      return `<div class="club"><span class="rank">${rank}</span>${swatch(row.colors)}${name}</div>`;
+    }
+
+    function shortDate(iso) {
+      const parts = String(iso).split("-");
+      if (parts.length !== 3) return iso;
+      return `${Number(parts[1])}/${Number(parts[2])}`;
+    }
+
+    function strokeFor(row) {
+      const id = row.team || row.id;
+      const team = id ? teamById(id) : null;
+      if (team && team.stroke) return team.stroke;
+      const colors = row.colors || (team && team.colors) || ["#1e3a5f"];
+      return colors[0];
+    }
+
+    function localTotal(prediction, actual) {
+      const rank = {};
+      actual.forEach((id, index) => { rank[id] = index + 1; });
+      return prediction.reduce((sum, id, index) => sum + Math.abs(index + 1 - rank[id]), 0);
+    }
+
+    function preview() {
+      const standings = app.state.standings;
+      if (!standings || !standings.central || !standings.pacific) return null;
+      const central = localTotal(app.state.draft.central, standings.central);
+      const pacific = localTotal(app.state.draft.pacific, standings.pacific);
+      return { central, pacific, total: central + pacific };
+    }
+
+    function display() {
+      const archive = app.state && app.state.archive_view;
+      return archive || app.state || {};
+    }
+
+    function jpDate(iso) {
+      const parts = String(iso || "").split("-");
+      if (parts.length !== 3) return "";
+      return `${Number(parts[1])}月${Number(parts[2])}日`;
+    }
+
+    function todayJst() {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    }
+
+    function shareText(full) {
+      const score = display().score;
+      if (!score) return "プロ野球順位予想　ペナントペナルティ";
+      const mark = score.provisional ? "（未確定）" : "";
+      const head = `${mark}プロ野球順位予想　ペナントペナルティ 合計${score.total}ズレ（セ${score.central.total}/パ${score.pacific.total}）`;
+      const compactLine = (block) => block.rows.map((row) => `${row.name}${row.predicted_rank}→${row.actual_rank}`).join(" ");
+      if (!full) {
+        return `${head}\nセ ${compactLine(score.central)}\nパ ${compactLine(score.pacific)}\n0ズレがドンピシャ #プロ野球`;
+      }
+      const detail = (block) => block.rows.map((row) => `${row.predicted_rank}位 ${row.name} → ${row.actual_rank}位 (${arrow(row.delta)})  ${row.penalty}ズレ`).join("\n");
+      const stamp = app.state.confirmed_label ? `最終確定: ${app.state.confirmed_label}` : "未確定の下書き";
+      return `${head}\n\n【${score.central.name}】\n${detail(score.central)}\n${score.central.name}合計: ${score.central.total}ズレ\n\n【${score.pacific.name}】\n${detail(score.pacific)}\n${score.pacific.name}合計: ${score.pacific.total}ズレ\n\n${stamp}\n0ズレがドンピシャ`;
+    }
+
+    function statusBanners() {
+      const state = app.state;
+      const parts = [];
+      if (state.last_error) parts.push(`<p class="banner warn">${esc(state.last_error)}</p>`);
+      if (state.using === "draft") {
+        parts.push(`<p class="banner info">表示中のズレは下書きのプレビューです。設定で確定すると、その順位が採点対象になります。</p>`);
+      } else if (!state.locked && state.draft_differs) {
+        parts.push(`<p class="banner info">修正中です。表示中のズレは、確定済みの予想です。</p>`);
+      }
+      return parts.join("");
+    }
+
+    function sourceLine() {
+      const standings = display().standings;
+      if (!standings || !standings.source_label) return "";
+      const when = standings.fetched_label ? `取得 ${standings.fetched_label}` : "";
+      const link = standings.source_url
+        ? `<a href="${esc(standings.source_url)}" target="_blank" rel="noopener">${esc(standings.source_label)}</a>`
+        : esc(standings.source_label);
+      const cross = standings.cross_check ? ` / 突合: ${esc(standings.cross_check.detail || "")}` : "";
+      return `<p class="source">${link}${when ? ` / ${esc(when)}` : ""}${cross}</p>`;
+    }
+
+    function seasonStatus(progress) {
+      const start = app.state.can_start_next && !app.state.viewing_year
+        ? `<button type="button" class="btn" data-action="start-season">${esc(app.state.next_year)}年の予想を始める</button>`
+        : "";
+      if (progress && progress.finished && progress.year) {
+        return `<section class="season-status${start ? " has-action" : ""}"><p>${esc(progress.year)}年レギュラーシーズン終了</p>${start}</section>`;
+      }
+      if (progress && progress.played != null && progress.total) {
+        const when = progress.as_of ? `${jpDate(progress.as_of)}時点` : "";
+        const pct = Math.max(0, Math.min(100, Math.round(progress.played / progress.total * 100)));
+        const head = `${when ? `${when}　` : ""}${progress.total}試合中${progress.played}試合終了　残り${progress.remaining}試合`;
+        return `<section class="season-status" aria-label="シーズンの進捗"><p>${esc(head)}</p><div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-valuetext="${pct}%"><span style="width:${pct}%"></span></div></section>`;
+      }
+      if (app.state.season_year && !app.state.standings && !app.state.viewing_year) {
+        return `<section class="season-status"><p>${esc(app.state.season_year)}年の予想</p><p class="note">開幕後に順位と試合数が入ります。</p></section>`;
+      }
+      return "";
+    }
+
+    function viewingBanner() {
+      if (!app.state.viewing_year) return "";
+      const back = app.state.season_year || "いま";
+      return `<div class="banner info">${esc(app.state.viewing_year)}年の結果を表示しています。<button type="button" class="btn" data-action="view-season" data-year="">${esc(back)}年の予想に戻る</button></div>`;
+    }
+
+    function resultsCard(progress, games, url) {
+      const list = games || [];
+      if (!list.length && !url) return "";
+      const finished = progress && progress.finished;
+      const today = progress && progress.as_of && progress.as_of === todayJst();
+      const title = finished ? "レギュラーシーズン最終日" : (today ? "今日の試合結果" : "直近の試合結果");
+      const when = progress && progress.as_of ? jpDate(progress.as_of) : "";
+      const rows = list.map((game) => `<li><span class="side away">${esc(game.away)}</span><span class="score">${esc(game.away_score)}</span><span class="hyphen">-</span><span class="score">${esc(game.home_score)}</span><span class="side">${esc(game.home)}</span></li>`).join("");
+      const note = finished
+        ? "クライマックスシリーズ以降は、NPB公式のページで見られます。"
+        : "試合の詳細は、NPB公式のページで見られます。";
+      const link = url ? `<p class="note">${esc(note)} <a href="${esc(url)}" target="_blank" rel="noopener">NPB公式の試合結果</a></p>` : "";
+      const body = rows ? `<ul class="results">${rows}</ul>` : `<p class="empty">表示できる試合結果はまだありません。</p>`;
+      return `<article class="card"><div class="card-head"><h2>${title}</h2>${when ? `<span class="note">${esc(when)}</span>` : ""}</div>${body}${link}</article>`;
+    }
+
+    function attemptLog() {
+      const attempts = display().standings && display().standings.attempts;
+      if (!attempts || !attempts.length) return "";
+      const items = attempts.map((item) => {
+        const mark = item.ok ? `<span class="ok">取得</span>` : `<span class="ng">失敗</span>`;
+        const detail = item.detail ? `（${esc(item.detail)}）` : "";
+        const error = item.error ? ` — ${esc(item.error)}` : "";
+        return `<li>${mark} ${esc(item.label)} <span class="url">${esc(item.url)}</span>${detail}${error}</li>`;
+      }).join("");
+      return `<details class="log"><summary>取得ログ</summary><ul>${items}</ul></details>`;
+    }
+
+    function hero() {
+      const score = display().score;
+      const total = score ? score.total : "—";
+      const closeness = !score ? "順位表を取得するとズレを計算します" : (score.total === 0 ? "ドンピシャ" : "");
+      const central = score ? `${score.central.total}<small>ズレ</small>` : "—";
+      const pacific = score ? `${score.pacific.total}<small>ズレ</small>` : "—";
+      const basis = app.state.viewing_year
+        ? `${esc(app.state.viewing_year)}年の結果です`
+        : app.state.using === "confirmed"
+          ? `採点対象: ${esc(app.state.confirmed_label)} の確定予想`
+          : "採点対象: 未確定の下書き";
+      const shareDisabled = score ? "" : "disabled";
+      return `
+        <section class="card hero">
+          <div class="hero-grid">
+            <div>
+              <p class="eyebrow">両リーグ合計</p>
+              <p class="score-num">${total}<span>ズレ</span></p>
+              ${closeness ? `<p class="closeness">${esc(closeness)}</p>` : ""}
+            </div>
+            <div class="splits">
+              <div><span>セ・リーグ</span><strong>${central}</strong></div>
+              <div><span>パ・リーグ</span><strong>${pacific}</strong></div>
+            </div>
+            <div class="hero-actions">
+              <button type="button" class="btn btn-primary" data-action="refresh">最新順位を取得</button>
+              <button type="button" class="btn" data-action="share" ${shareDisabled}>画像をシェア</button>
+              <button type="button" class="btn" data-action="copy" ${shareDisabled}>テキストをコピー</button>
+            </div>
+          </div>
+          <p class="score-basis">${basis}</p>
+        </section>`;
+    }
+
+    function matchRow(row, rank, side) {
+      const penalty = side === "actual"
+        ? `<span class="penalty ${row.penalty === 0 ? "is-zero" : "is-miss"}">${row.penalty}<span>ズレ</span></span>`
+        : "";
+      const label = side === "pred"
+        ? `予想${row.predicted_rank}位 ${row.name}、現在${row.actual_rank}位、${row.penalty}ズレ`
+        : `現在${rank}位 ${row.name}、${row.penalty}ズレ`;
+      return `<div class="match-row" data-team="${esc(row.team)}" data-stroke="${strokeFor(row)}" aria-label="${esc(label)}">${club(row, rank, side === "actual")}${penalty}</div>`;
+    }
+
+    function tableHtml(block, league) {
+      const actual = block.rows.slice().sort((a, b) => a.actual_rank - b.actual_rank);
+      const left = block.rows.map((row) => matchRow(row, row.predicted_rank, "pred")).join("");
+      const right = actual.map((row) => matchRow(row, row.actual_rank, "actual")).join("");
+      return `
+        <article class="card league-${league}">
+          <div class="card-head"><h2>${esc(block.name)}</h2></div>
+          <div class="table-wrap">
+            <div class="match-board">
+              <div class="match-side">
+                <div class="match-label">予想順位</div>
+                <div class="match-col pred">${left}</div>
+              </div>
+              <div class="match-bridge" aria-hidden="true"></div>
+              <div class="match-side">
+                <div class="match-label">現在の順位</div>
+                <div class="match-col actual">${right}</div>
+              </div>
+              <svg class="match-lines" role="img" aria-label="${esc(block.name)}の予想と現在順位の対応"></svg>
+            </div>
+          </div>
+          <p class="grand">${esc(block.name)}合計: ${block.total}ズレ</p>
+        </article>`;
+    }
+
+    function emptyTable(league) {
+      const ids = app.state.using === "confirmed" && app.state.confirmed ? app.state.confirmed[league] : app.state.draft[league];
+      const label = league === "central" ? "セ・リーグ" : "パ・リーグ";
+      const rows = ids.map((id, index) => {
+        const team = teamById(id);
+        return `<tr><td>${club(team, index + 1, true)}</td><td class="move-line">—</td><td>—</td><td class="penalty">—</td></tr>`;
+      }).join("");
+      return `
+        <article class="card league-${league}">
+          <div class="card-head"><h2>${label}</h2></div>
+          <div class="table-wrap">
+            <table class="compare">
+              <thead><tr><th>予想順位</th><th>変動</th><th>現在の順位</th><th>ズレ</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </article>`;
+    }
+
+    function homeView() {
+      const shown = display();
+      const score = shown.score;
+      const tables = score
+        ? `${tableHtml(score.central, "central")}${tableHtml(score.pacific, "pacific")}<p class="grand">両リーグ合計: ${score.total}ズレ</p>`
+        : `${emptyTable("central")}${emptyTable("pacific")}`;
+      return `
+        <div class="stack">
+          ${seasonStatus(shown.progress)}
+          ${viewingBanner()}
+          ${app.state.viewing_year ? "" : statusBanners()}
+          ${hero()}
+          ${tables}
+          ${resultsCard(shown.progress, shown.recent_games, shown.games_url)}
+          ${sourceLine()}
+          ${attemptLog()}
+        </div>`;
+    }
+
+    function trendTable() {
+      const signed = (value) => value === 0 ? "0" : `-${value}`;
+      const rows = (app.state.trend || []).map((point) => `<tr><td>${esc(point.date)}</td><td>${signed(point.total)}</td><td>${signed(point.central)}</td><td>${signed(point.pacific)}</td></tr>`).join("");
+      if (!rows) return `<p class="empty">まだ推移データがありません。</p>`;
+      return `<div class="mini-wrap"><table class="mini"><thead><tr><th>日付</th><th>合計</th><th>セ</th><th>パ</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+
+    function graphView() {
+      const trend = display().trend || [];
+      const count = trend.length;
+      const finished = display().standings && display().standings.season_finished;
+      const span = count ? `${shortDate(trend[0].date)}から${shortDate(trend[count - 1].date)}まで` : "";
+      const countNote = count <= 1
+        ? "まだ1日分です。順位を更新すると、開幕からの線が入ります。"
+        : `${span}の${count}日分です。`;
+      const seriesButtons = [
+        ["total", "合計", "両リーグ合計", "#1c2430"],
+        ["central", "セ", "セ・リーグ", "#0e7a45"],
+        ["pacific", "パ", "パ・リーグ", "#1d4e89"]
+      ].map(([key, label, full, color]) => `<button type="button" data-action="series" data-series="${key}" class="${app.series[key] ? "on" : "off"}" aria-label="${full}" title="${full}"><span class="swatch" style="--c1:${color};--c2:${color}"></span>${label}</button>`).join("");
+      const rankData = display().ranks && display().ranks[app.rankLeague];
+      const teamButtons = rankData ? rankData.teams.map((team) => `<button type="button" data-action="solo" data-team="${team.id}" class="${app.solo === team.id ? "on" : ""}">${swatch(team.colors)}${esc(team.name)}</button>`).join("") : "";
+      const soloNote = app.solo ? `<span class="key"><span class="dash-sample"></span>点線は予想順位</span>` : "";
+      return `
+        <div class="stack">
+          <article class="card">
+            <div class="card-head"><h2>予想ズレ点の推移</h2></div>
+            <p class="note">採点対象の予想について、開幕日から${finished ? "順位が確定した日" : "最新の試合日"}まで、1日ごとのズレです。試合のない日は前日の順位のままです。0が一番上で、<strong>ズレが大きいほど下のマイナスになります。</strong>${countNote}</p>
+            <div class="legend one-line">${seriesButtons}</div>
+            <div class="chart" id="penalty-chart"></div>
+            ${trendTable()}
+          </article>
+          <article class="card">
+            <div class="card-head">
+              <h2>チーム順位の推移</h2>
+              <div class="segment">
+                <button type="button" data-action="rank-league" data-league="central" class="${app.rankLeague === "central" ? "on" : ""}">セ・リーグ</button>
+                <button type="button" data-action="rank-league" data-league="pacific" class="${app.rankLeague === "pacific" ? "on" : ""}">パ・リーグ</button>
+              </div>
+            </div>
+            <div class="segment" style="margin-top:8px">
+              <button type="button" data-action="rank-span" data-span="day" class="${app.rankSpan === "day" ? "on" : ""}">日ごと</button>
+              <button type="button" data-action="rank-span" data-span="month" class="${app.rankSpan === "month" ? "on" : ""}">月ごと</button>
+            </div>
+            <p class="note">実際の順位です。上にあるほど上位です。${app.rankSpan === "month" ? "月ごとは、その月の最後の試合日の順位です。" : "日ごとは、毎日の順位です。"}チームを選ぶと、予想順位を点線で重ねます。</p>
+            <div class="legend">${teamButtons}${soloNote}</div>
+            <div class="chart" id="rank-chart"></div>
+          </article>
+        </div>`;
+    }
+
+    function seasonCard() {
+      const state = app.state;
+      const archives = state.archives || [];
+      const items = archives.map((item) => {
+        const current = state.viewing_year === item.year ? `<span class="tag">表示中</span>` : "";
+        return `<li><span>${esc(item.year)}年の結果${current}</span><button type="button" class="btn" data-action="view-season" data-year="${esc(item.year)}">結果を見る</button></li>`;
+      }).join("");
+      const start = state.can_start_next
+        ? `<button type="button" class="btn btn-primary" data-action="start-season">${esc(state.next_year)}年の予想を始める</button>`
+        : "";
+      const back = state.viewing_year
+        ? `<button type="button" class="btn" data-action="view-season" data-year="">${esc(state.season_year)}年の予想に戻る</button>`
+        : "";
+      let lead = "シーズンの結果は、まだありません。";
+      if (state.viewing_year) lead = `${state.viewing_year}年の結果を表示しています。順位の編集は${state.season_year}年の予想です。`;
+      else if (state.season_year && !state.standings) lead = `${state.season_year}年の予想を編集しています。順位表は開幕後に入ります。`;
+      else if (state.standings && state.standings.season_finished) lead = `${state.standings.season}年の結果を表示しています。次の年の予想は、開幕前の好きなときに始められます。`;
+      else if (state.standings && state.standings.season) lead = `${state.standings.season}年の予想を表示しています。`;
+      const note = state.can_start_next
+        ? `<p class="note">始めると、ホームは${esc(state.next_year)}年の下書きになります。${esc(state.standings.season)}年のズレとグラフは、ここに残ります。</p>`
+        : "";
+      const list = items ? `<ul class="season-list">${items}</ul>` : "";
+      return `
+        <article class="card">
+          <h2>シーズン</h2>
+          <p class="score-basis">${esc(lead)}</p>
+          ${note}
+          <div class="actions" style="margin-top:12px">${start}${back}</div>
+          ${list}
+        </article>`;
+    }
+
+    function settingsView() {
+      const locked = app.state.locked;
+      const seen = preview();
+      const score = app.state.score;
+      let previewText = "順位表を取得すると、この並びのズレをプレビューできます。";
+      if (seen && locked && score) previewText = `確定中のズレは ${score.total} です（セ ${score.central.total} / パ ${score.pacific.total}）。`;
+      else if (seen && app.state.confirmed && app.state.draft_differs && score) previewText = `修正中の並びは ${seen.total}ズレです。確定中のズレは ${score.total} です。`;
+      else if (seen) previewText = `この並びを確定すると、現在の順位とのズレは ${seen.total} です（セ ${seen.central} / パ ${seen.pacific}）。`;
+      const confirmLabel = !app.state.confirmed ? "この順位で確定する" : (locked ? "確定済み" : "更新して確定する");
+      const extra = app.state.confirmed
+        ? (locked
+          ? `<button type="button" class="btn" data-action="unlock">修正する</button>`
+          : `<button type="button" class="btn" data-action="cancel-edit">修正をやめる</button>`)
+        : "";
+      const resetDisabled = locked ? "disabled" : "";
+      const confirmDisabled = locked ? "disabled" : "";
+      return `
+        <div class="stack">
+          ${seasonCard()}
+          <article class="card">
+            <div class="card-head"><h2>予想順位</h2><span class="note">${esc(stampLine())}</span></div>
+            <p class="note">行をドラッグするか、↑↓で並べます。スマホでは左の点を押さえて動かします。確定中は「修正する」を押してからです。各チームの |予想順位 − 実際の順位| を合計し、0ズレがドンピシャです。</p>
+            <p class="score-basis">${esc(previewText)}</p>
+            <div class="actions" style="margin-top:12px">
+              <button type="button" class="btn btn-primary" data-action="confirm" ${confirmDisabled}>${confirmLabel}</button>
+              ${extra}
+              <button type="button" class="btn" data-action="reset-draft" ${resetDisabled}>初期順に戻す</button>
+            </div>
+          </article>
+          <div class="boards">
+            ${board("central", "セ・リーグ")}
+            ${board("pacific", "パ・リーグ")}
+          </div>
+          <article class="card">
+            <h2>変更履歴</h2>
+            ${historyHtml()}
+          </article>
+        </div>`;
+    }
+
+    function stampLine() {
+      if (!app.state.confirmed_label) return "まだ確定していません";
+      if (app.state.first_confirmed_label && app.state.first_confirmed_label !== app.state.confirmed_label) {
+        return `初回確定: ${app.state.first_confirmed_label} / 最終確定: ${app.state.confirmed_label}`;
+      }
+      return `最終確定: ${app.state.confirmed_label}`;
+    }
+
+    function board(league, label) {
+      const ids = app.state.draft[league];
+      const locked = app.state.locked;
+      const rows = ids.map((id, index) => {
+        const team = teamById(id);
+        const drag = locked ? "" : `data-drag="1"`;
+        const up = index === 0 || locked ? "disabled" : "";
+        const down = index === ids.length - 1 || locked ? "disabled" : "";
+        return `
+          <div class="team-row" data-league="${league}" data-index="${index}" ${drag}>
+            <span class="pos">${index + 1}</span>
+            <span class="grip" aria-hidden="true"></span>
+            ${swatch(team.colors)}
+            <span class="tname" title="${esc(team.full_name)}">${esc(team.name)}</span>
+            <span style="flex:1"></span>
+            <button type="button" class="btn icon-btn" data-action="move" data-league="${league}" data-index="${index}" data-dir="-1" ${up} aria-label="${esc(team.name)}を上へ">↑</button>
+            <button type="button" class="btn icon-btn" data-action="move" data-league="${league}" data-index="${index}" data-dir="1" ${down} aria-label="${esc(team.name)}を下へ">↓</button>
+          </div>`;
+      }).join("");
+      return `<article class="card league-${league}"><h2>${label}</h2>${rows}</article>`;
+    }
+
+    function historyHtml() {
+      const items = app.state.history || [];
+      if (!items.length) return `<p class="empty">確定すると、ここに履歴が残ります。</p>`;
+      return `<ul class="history">${items.map((item) => `
+        <li>
+          <time>${esc(item.label)}</time><span class="tag">${esc(item.action)}</span>
+          <p class="note">セ ${esc(item.central.map((id) => teamById(id).name).join(" › "))}</p>
+          <p class="note">パ ${esc(item.pacific.map((id) => teamById(id).name).join(" › "))}</p>
+        </li>`).join("")}</ul>`;
+    }
+
+    function render(y) {
+      document.getElementById("app").innerHTML = `
+        <section class="view" data-view="home">${homeView()}</section>
+        <section class="view" data-view="graph">${graphView()}</section>
+        <section class="view" data-view="settings">${settingsView()}</section>`;
+      syncRoute();
+      window.scrollTo(0, y || 0);
+    }
+
+    function currentRoute() {
+      const name = (location.hash || "#home").replace("#", "");
+      return ["home", "graph", "settings"].includes(name) ? name : "home";
+    }
+
+    function syncRoute() {
+      const route = currentRoute();
+      document.querySelectorAll(".view").forEach((el) => el.classList.toggle("active", el.dataset.view === route));
+      document.querySelectorAll("nav a").forEach((el) => el.classList.toggle("active", el.dataset.route === route));
+      if (route === "graph") requestAnimationFrame(() => drawCharts(false));
+      if (route === "home") requestAnimationFrame(() => drawMatchLines());
+    }
+
+    function drawMatchLines() {
+      if (currentRoute() !== "home") return;
+      document.querySelectorAll(".match-board").forEach((board) => {
+        const svg = board.querySelector(".match-lines");
+        const width = board.clientWidth;
+        const height = board.clientHeight;
+        if (!svg || !width || !height) return;
+        const box = board.getBoundingClientRect();
+        const right = {};
+        board.querySelectorAll(".match-col.actual .match-row").forEach((row) => {
+          right[row.dataset.team] = row;
+        });
+        const parts = [];
+        board.querySelectorAll(".match-col.pred .match-row").forEach((row) => {
+          const other = right[row.dataset.team];
+          if (!other) return;
+          const from = row.getBoundingClientRect();
+          const to = other.getBoundingClientRect();
+          const x1 = from.right - box.left;
+          const y1 = from.top + from.height / 2 - box.top;
+          const x2 = to.left - box.left;
+          const y2 = to.top + to.height / 2 - box.top;
+          const color = row.dataset.stroke || "#1e3a5f";
+          const bend = Math.max(24, (x2 - x1) * 0.45);
+          const endX = x2 - 7;
+          const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} C ${(x1 + bend).toFixed(1)} ${y1.toFixed(1)}, ${(x2 - bend).toFixed(1)} ${y2.toFixed(1)}, ${endX.toFixed(1)} ${y2.toFixed(1)}`;
+          if (isLightColor(color)) parts.push(`<path d="${d}" fill="none" stroke="#1a1a1a" stroke-width="3.4" stroke-linecap="round"></path>`);
+          parts.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round"></path>`);
+          const tip = `${x2.toFixed(1)},${y2.toFixed(1)} ${(x2 - 7).toFixed(1)},${(y2 - 3.5).toFixed(1)} ${(x2 - 7).toFixed(1)},${(y2 + 3.5).toFixed(1)}`;
+          parts.push(`<polygon points="${tip}" fill="${color}"${isLightColor(color) ? ` stroke="#1a1a1a" stroke-width="1"` : ""}></polygon>`);
+        });
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.innerHTML = parts.join("");
+      });
+    }
+
+    function isLightColor(color) {
+      const hex = String(color || "").replace("#", "");
+      if (hex.length !== 6) return false;
+      const value = parseInt(hex, 16);
+      const r = (value >> 16) & 255;
+      const g = (value >> 8) & 255;
+      const b = value & 255;
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.72;
+    }
+
+    function monthIndexes(dates) {
+      const indexes = [];
+      dates.forEach((iso, index) => {
+        const month = String(iso).slice(0, 7);
+        if (!indexes.length || String(dates[indexes[indexes.length - 1]]).slice(0, 7) !== month) indexes.push(index);
+        else indexes[indexes.length - 1] = index;
+      });
+      return indexes;
+    }
+
+    function labelIndexes(count) {
+      if (count <= 8) return [...Array(count).keys()];
+      const step = Math.ceil(count / 6);
+      const indexes = [];
+      for (let i = 0; i < count; i += step) indexes.push(i);
+      if (indexes[indexes.length - 1] !== count - 1) indexes.push(count - 1);
+      return indexes;
+    }
+
+    function drawLineChart(el, options) {
+      if (!options.dates.length) {
+        el.innerHTML = `<p class="empty">${esc(options.empty)}</p>`;
+        return;
+      }
+      const width = el.clientWidth;
+      const height = 300;
+      const pad = { l: options.tickUnit ? 68 : 48, r: 16, t: 16, b: 36 };
+      const innerW = width - pad.l - pad.r;
+      const innerH = height - pad.t - pad.b;
+      const x = (index) => options.dates.length === 1 ? pad.l + innerW / 2 : pad.l + (index / (options.dates.length - 1)) * innerW;
+      const y = (value) => {
+        const ratio = (value - options.yMin) / ((options.yMax - options.yMin) || 1);
+        return pad.t + (options.reverse ? ratio : 1 - ratio) * innerH;
+      };
+      const grid = options.ticks.map((tick) => {
+        const yy = y(tick);
+        const label = options.formatTick ? options.formatTick(tick) : String(tick);
+        const unit = options.tickUnit ? `<tspan class="tick-unit">${esc(options.tickUnit)}</tspan>` : "";
+        return `<line class="grid" x1="${pad.l}" y1="${yy}" x2="${width - pad.r}" y2="${yy}"></line><text x="${pad.l - 8}" y="${yy + 4}" text-anchor="end">${esc(label)}${unit}</text>`;
+      }).join("");
+      const labels = labelIndexes(options.dates.length).map((index) => {
+        const count = options.dates.length;
+        const anchor = count > 1 && index === 0 ? "start" : count > 1 && index === count - 1 ? "end" : "middle";
+        return `<text x="${x(index)}" y="${height - 12}" text-anchor="${anchor}">${esc(shortDate(options.dates[index]))}</text>`;
+      }).join("");
+      const paths = options.series.filter((series) => !series.hidden).map((series) => {
+        const points = series.values.map((value, index) => `${x(index)},${y(value)}`).join(" ");
+        const circles = series.dash || options.dates.length > 20 ? "" : series.values.map((value, index) => `<circle cx="${x(index)}" cy="${y(value)}" r="${options.dates.length === 1 ? 5 : 3.5}" fill="${series.color}"></circle>`).join("");
+        const dash = series.dash ? ` stroke-dasharray="5 4"` : "";
+        const edge = !series.dash && isLightColor(series.color) ? `<polyline points="${points}" fill="none" stroke="#1a1a1a" stroke-width="3.6"></polyline>` : "";
+        return `${edge}<polyline points="${points}" fill="none" stroke="${series.color}" stroke-width="${series.dash ? 1.6 : 2.2}"${dash}></polyline>${circles}`;
+      }).join("");
+      el.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(options.label)}">${grid}${paths}${labels}</svg>`;
+    }
+
+    function drawCharts(retried) {
+      if (currentRoute() !== "graph") return;
+      const penalty = document.getElementById("penalty-chart");
+      const rank = document.getElementById("rank-chart");
+      if (!penalty || penalty.clientWidth === 0) {
+        if (!retried) requestAnimationFrame(() => drawCharts(true));
+        return;
+      }
+      const trend = display().trend || [];
+      const visible = [
+        { key: "total", color: "#1c2430", values: trend.map((point) => -point.total) },
+        { key: "central", color: "#0e7a45", values: trend.map((point) => -point.central) },
+        { key: "pacific", color: "#1d4e89", values: trend.map((point) => -point.pacific) }
+      ].filter((series) => app.series[series.key]);
+      const magnitude = Math.max(0, ...visible.flatMap((series) => series.values.map((value) => -value)));
+      const step = magnitude <= 8 ? 2 : magnitude <= 20 ? 4 : 8;
+      const yMin = -Math.max(step, Math.ceil(Math.max(magnitude, 1) / step) * step);
+      const ticks = [];
+      for (let value = 0; value >= yMin; value -= step) ticks.push(value);
+      drawLineChart(penalty, {
+        dates: trend.map((point) => point.date),
+        series: visible,
+        yMin,
+        yMax: 0,
+        reverse: false,
+        ticks,
+        tickUnit: "ズレ",
+        label: "ズレ点の推移",
+        empty: "まだ推移データがありません。順位を取得すると、その日の点が残ります。"
+      });
+      const data = display().ranks && display().ranks[app.rankLeague];
+      let dates = data ? data.dates : [];
+      let teams = data ? data.teams : [];
+      if (app.solo) teams = teams.filter((team) => team.id === app.solo);
+      let series = teams.map((team) => ({ color: strokeFor(team), values: team.ranks, dash: false, hidden: false }));
+      if (app.solo && teams[0]) {
+        series.push({ color: strokeFor(teams[0]), values: dates.map(() => teams[0].predicted_rank), dash: true, hidden: false });
+      }
+      if (app.rankSpan === "month") {
+        const indexes = monthIndexes(dates);
+        dates = indexes.map((index) => dates[index]);
+        series = series.map((item) => ({ ...item, values: indexes.map((index) => item.values[index]) }));
+      }
+      drawLineChart(rank, {
+        dates,
+        series,
+        yMin: 1,
+        yMax: 6,
+        reverse: true,
+        ticks: [1, 2, 3, 4, 5, 6],
+        formatTick: (value) => `${value}位`,
+        label: "チーム順位の推移",
+        empty: "順位の記録がまだありません。"
+      });
+    }
+
+    function reorder(draft, league, from, to) {
+      if (from === to || to < 0 || to >= draft[league].length) return null;
+      const order = draft[league].slice();
+      const [item] = order.splice(from, 1);
+      order.splice(to, 0, item);
+      return {
+        central: league === "central" ? order : draft.central.slice(),
+        pacific: league === "pacific" ? order : draft.pacific.slice()
+      };
+    }
+
+    function commitLineup(next) {
+      if (!next || app.state.locked) return;
+      app.state.draft = next;
+      render(window.scrollY);
+      const snapshot = { central: next.central.slice(), pacific: next.pacific.slice() };
+      const rev = ++draftRev;
+      enqueue(async () => {
+        const data = await postJson("/api/draft", snapshot);
+        if (data && data.teams && (data.error || rev === draftRev)) applyState(data);
+      });
+    }
+
+    function onClick(event) {
+      const button = event.target.closest("[data-action]");
+      if (!button || button.disabled) return;
+      const action = button.dataset.action;
+      if (action === "refresh") {
+        button.disabled = true;
+        enqueue(async () => {
+          const data = await postJson("/api/refresh");
+          if (data && data.teams) applyState(data);
+        });
+      } else if (action === "share") {
+        shareBoard();
+      } else if (action === "copy") {
+        copyText();
+      } else if (action === "confirm" || action === "unlock" || action === "cancel-edit" || action === "reset-draft") {
+        const path = { confirm: "/api/confirm", unlock: "/api/unlock", "cancel-edit": "/api/cancel-edit", "reset-draft": "/api/draft/reset" }[action];
+        enqueue(async () => {
+          const data = await postJson(path);
+          if (data && data.teams) applyState(data);
+        });
+      } else if (action === "move") {
+        commitLineup(reorder(app.state.draft, button.dataset.league, Number(button.dataset.index), Number(button.dataset.index) + Number(button.dataset.dir)));
+      } else if (action === "rank-league") {
+        app.rankLeague = button.dataset.league;
+        app.solo = null;
+        render(window.scrollY);
+      } else if (action === "rank-span") {
+        app.rankSpan = button.dataset.span === "month" ? "month" : "day";
+        render(window.scrollY);
+      } else if (action === "solo") {
+        app.solo = app.solo === button.dataset.team ? null : button.dataset.team;
+        render(window.scrollY);
+      } else if (action === "start-season") {
+        const year = app.state.next_year;
+        const prev = (app.state.standings && app.state.standings.season) || (year - 1);
+        if (!window.confirm(`${year}年の予想を始めます。\n${prev}年のズレとグラフは履歴に残ります。ホームは${year}年の下書きに切り替わります。`)) return;
+        enqueue(async () => {
+          const data = await postJson("/api/season/start");
+          if (data && data.teams) applyState(data);
+        });
+      } else if (action === "view-season") {
+        const year = button.dataset.year;
+        enqueue(async () => {
+          const data = await postJson("/api/season/view", year ? { year: Number(year) } : { year: null });
+          if (data && data.teams) applyState(data);
+        });
+      } else if (action === "series") {
+        const key = button.dataset.series;
+        app.series[key] = !app.series[key];
+        if (!app.series.total && !app.series.central && !app.series.pacific) app.series[key] = true;
+        render(window.scrollY);
+      }
+    }
+
+    function drawShareSwatch(ctx, x, y, colors) {
+      ctx.save();
+      ctx.fillStyle = colors[0];
+      ctx.fillRect(x, y, 14, 16);
+      ctx.fillStyle = colors[1] || colors[0];
+      ctx.fillRect(x + 14, y, 14, 16);
+      ctx.strokeStyle = "rgba(0,0,0,0.18)";
+      ctx.strokeRect(x + 0.5, y + 0.5, 27, 15);
+      ctx.restore();
+    }
+
+    function renderShareCanvas() {
+      const score = display().score;
+      const width = 720;
+      const rowH = 52;
+      const leagueH = 52 + rowH * 6 + 18;
+      const height = 24 + 150 + 16 + leagueH + 16 + leagueH + 28;
+      const canvas = document.createElement("canvas");
+      const scale = 2;
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+      const font = "'Segoe UI', 'Yu Gothic UI', 'Yu Gothic', 'Hiragino Sans', Meiryo, sans-serif";
+      ctx.fillStyle = "#f4f6f8";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#1b2430";
+      ctx.font = `700 22px ${font}`;
+      ctx.fillText("プロ野球順位予想　ペナントペナルティ", 28, 46);
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#e3e7ee";
+      ctx.beginPath();
+      ctx.roundRect(28, 64, width - 56, 96, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#5e6a7a";
+      ctx.font = `700 13px ${font}`;
+      ctx.fillText("両リーグ合計", 48, 90);
+      ctx.fillStyle = "#1b2430";
+      ctx.font = `700 40px ${font}`;
+      ctx.fillText(String(score.total), 48, 136);
+      const totalW = ctx.measureText(String(score.total)).width;
+      ctx.font = `700 16px ${font}`;
+      ctx.fillText("ズレ", 54 + totalW, 136);
+      ctx.font = `700 16px ${font}`;
+      ctx.fillStyle = "#5e6a7a";
+      ctx.fillText("セ", 250, 108);
+      ctx.fillText("パ", 360, 108);
+      ctx.fillStyle = "#1b2430";
+      ctx.font = `700 24px ${font}`;
+      ctx.fillText(`${score.central.total}ズレ`, 250, 138);
+      ctx.fillText(`${score.pacific.total}ズレ`, 360, 138);
+
+      const drawLeague = (block, top, accent) => {
+        const x = 28;
+        const w = width - 56;
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#e3e7ee";
+        ctx.beginPath();
+        ctx.roundRect(x, top, w, leagueH, 12);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = accent;
+        ctx.fillRect(x, top, w, 4);
+        ctx.fillStyle = "#1b2430";
+        ctx.font = `700 18px ${font}`;
+        ctx.fillText(block.name, x + 20, top + 32);
+        ctx.font = `650 16px ${font}`;
+        const nameW = Math.max(...block.rows.map((row) => ctx.measureText(row.name).width));
+        ctx.font = `700 16px ${font}`;
+        const penW = Math.max(...block.rows.map((row) => ctx.measureText(`${row.penalty}ズレ`).width));
+        const rightW = 22 + 8 + 28 + 8 + nameW + 22 + penW;
+        const rightX = x + w - 20 - rightW;
+        const leftX = x + 20;
+        const actualY = {};
+        block.rows.forEach((row) => {
+          actualY[row.team] = top + 48 + (row.actual_rank - 1) * rowH + rowH / 2;
+        });
+        block.rows.forEach((row) => {
+          const y1 = top + 48 + (row.predicted_rank - 1) * rowH + rowH / 2;
+          const y2 = actualY[row.team];
+          const x1 = leftX + 22 + 8 + 28;
+          const x2 = rightX - 8;
+          const color = strokeFor(row);
+          const bend = Math.max(28, (x2 - x1) * 0.45);
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.bezierCurveTo(x1 + bend, y1, x2 - bend, y2, x2, y2);
+          if (isLightColor(color)) {
+            ctx.strokeStyle = "#1a1a1a";
+            ctx.lineWidth = 4;
+            ctx.stroke();
+          }
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.4;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(x2 + 7, y2);
+          ctx.lineTo(x2, y2 - 4);
+          ctx.lineTo(x2, y2 + 4);
+          ctx.closePath();
+          ctx.fillStyle = color;
+          ctx.fill();
+        });
+        block.rows.forEach((row) => {
+          const y = top + 48 + (row.predicted_rank - 1) * rowH;
+          const cy = y + rowH / 2;
+          ctx.fillStyle = "#5e6a7a";
+          ctx.font = `700 16px ${font}`;
+          ctx.textAlign = "left";
+          ctx.fillText(String(row.predicted_rank), leftX, cy + 6);
+          drawShareSwatch(ctx, leftX + 22, cy - 8, row.colors);
+        });
+        const actual = block.rows.slice().sort((a, b) => a.actual_rank - b.actual_rank);
+        actual.forEach((row) => {
+          const y = top + 48 + (row.actual_rank - 1) * rowH;
+          const cy = y + rowH / 2;
+          ctx.fillStyle = "#5e6a7a";
+          ctx.font = `700 16px ${font}`;
+          ctx.textAlign = "left";
+          ctx.fillText(String(row.actual_rank), rightX, cy + 6);
+          drawShareSwatch(ctx, rightX + 22, cy - 8, row.colors);
+          ctx.fillStyle = "#1b2430";
+          ctx.font = `650 16px ${font}`;
+          ctx.textAlign = "left";
+          ctx.fillText(row.name, rightX + 22 + 8 + 28 + 8, cy + 6);
+          ctx.fillStyle = row.penalty === 0 ? "#0e7a45" : "#9a3412";
+          ctx.font = `700 16px ${font}`;
+          ctx.fillText(`${row.penalty}ズレ`, x + w - 20, cy + 6);
+          ctx.textAlign = "left";
+        });
+        ctx.fillStyle = "#1b2430";
+        ctx.font = `700 14px ${font}`;
+        ctx.textAlign = "right";
+        ctx.fillText(`${block.name}合計: ${block.total}ズレ`, x + w - 20, top + leagueH - 12);
+        ctx.textAlign = "left";
+      };
+      drawLeague(score.central, 180, "#0e7a45");
+      drawLeague(score.pacific, 180 + leagueH + 16, "#1d4e89");
+      return canvas;
+    }
+
+    async function shareBoard() {
+      const score = display().score;
+      if (!score) return;
+      const canvas = renderShareCanvas();
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (!blob) {
+        toast("画像を作れませんでした");
+        return;
+      }
+      const file = new File([blob], "pennant-penalty.png", { type: "image/png" });
+      const text = `合計${score.total}ズレ（セ${score.central.total}/パ${score.pacific.total}）`;
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "プロ野球順位予想　ペナントペナルティ", text });
+          return;
+        }
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "pennant-penalty.png";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("画像を保存しました。そこからLINEやメールで送れます。");
+    }
+
+    async function copyText() {
+      const text = shareText(true);
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (err) {
+        const area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+      }
+      toast("共有テキストをコピーしました");
+    }
+
+    function onPointerDown(event) {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      const row = event.target.closest(".team-row[data-drag]");
+      if (!row || event.target.closest("button")) return;
+      if (event.pointerType === "touch" && !event.target.closest(".grip")) return;
+      drag = {
+        pointerId: event.pointerId,
+        league: row.dataset.league,
+        index: Number(row.dataset.index),
+        startY: event.clientY,
+        active: false,
+        row
+      };
+      row.setPointerCapture(event.pointerId);
+    }
+
+    function onPointerMove(event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      if (!drag.active && Math.abs(event.clientY - drag.startY) < 6) return;
+      drag.active = true;
+      drag.row.classList.add("dragging");
+      drag.row.style.pointerEvents = "none";
+      const hit = document.elementFromPoint(event.clientX, event.clientY);
+      drag.row.style.pointerEvents = "";
+      const over = hit && hit.closest(".team-row[data-drag]");
+      document.querySelectorAll(".team-row.over").forEach((el) => el.classList.remove("over"));
+      if (over && over.dataset.league === drag.league) {
+        drag.over = over;
+        over.classList.add("over");
+      } else {
+        drag.over = null;
+      }
+    }
+
+    function onPointerUp(event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      const from = drag.index;
+      const over = drag.over;
+      const league = drag.league;
+      const moved = drag.active;
+      drag.row.classList.remove("dragging");
+      drag.row.style.pointerEvents = "";
+      document.querySelectorAll(".team-row.over").forEach((el) => el.classList.remove("over"));
+      drag = null;
+      if (moved && over && over.dataset.league === league) {
+        commitLineup(reorder(app.state.draft, league, from, Number(over.dataset.index)));
+      }
+    }
+
+    function bind() {
+      document.body.addEventListener("click", onClick);
+      document.body.addEventListener("pointerdown", onPointerDown);
+      document.body.addEventListener("pointermove", onPointerMove);
+      document.body.addEventListener("pointerup", onPointerUp);
+      document.body.addEventListener("pointercancel", onPointerUp);
+      window.addEventListener("hashchange", () => syncRoute());
+      window.addEventListener("resize", () => {
+        if (currentRoute() === "graph") drawCharts(false);
+        if (currentRoute() === "home") drawMatchLines();
+      });
+    }
+
+    async function boot() {
+      bind();
+      if (!location.hash) history.replaceState(null, "", "#home");
+      try {
+        const res = await fetch("/api/dashboard");
+        const data = await res.json();
+        if (!data.standings || data.stale) {
+          document.getElementById("app").innerHTML = `<p class="loading">NPBの順位表を取得しています…</p>`;
+          const fresh = await postJson("/api/refresh");
+          applyState(fresh && fresh.teams ? fresh : data);
+        } else {
+          applyState(data);
+        }
+      } catch (err) {
+        document.getElementById("app").innerHTML = `<p class="banner warn">サーバーに接続できません。python app.py で起動しているか確認してください。</p>`;
+      }
+    }
+
+    boot();
+  </script>
+</body>
+</html>
