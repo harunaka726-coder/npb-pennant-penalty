@@ -50,6 +50,9 @@ def today_jst() -> str:
     return datetime.now(npb_core.JST).date().isoformat()
 
 
+USER_DATA_KEYS = ("draft", "confirmed", "locked", "history", "archives", "season_year", "view_year")
+
+
 def default_state() -> dict:
     return {
         "draft": deepcopy(npb_core.DEFAULT_DRAFT),
@@ -694,6 +697,55 @@ def view_season():
     return jsonify(payload)
 
 
+def export_payload(state: dict) -> dict:
+    payload = {key: state.get(key) for key in USER_DATA_KEYS}
+    _iso, label = now_parts()
+    payload["format"] = "pennant-penalty"
+    payload["version"] = 1
+    payload["exported_label"] = label
+    return payload
+
+
+@app.get("/api/export")
+def export_data():
+    with LOCK:
+        return jsonify(export_payload(load_state()))
+
+
+@app.post("/api/import")
+def import_data():
+    body = request.get_json(force=True, silent=True)
+    if not isinstance(body, dict) or body.get("format") != "pennant-penalty":
+        with LOCK:
+            payload = public_state(load_state())
+        payload["error"] = "このアプリのバックアップファイルではありません。"
+        return jsonify(payload), 400
+    with LOCK:
+        state = load_state()
+        for key in USER_DATA_KEYS:
+            if key in body:
+                state[key] = body[key]
+        _repair(state)
+        save_state(state)
+        payload = public_state(state)
+    payload["notice"] = "バックアップを読み込みました。"
+    return jsonify(payload)
+
+
+@app.post("/api/data/delete")
+def delete_user_data():
+    with LOCK:
+        state = load_state()
+        fresh = default_state()
+        for key in USER_DATA_KEYS:
+            state[key] = fresh[key]
+        _repair(state)
+        save_state(state)
+        payload = public_state(state)
+    payload["notice"] = "予想データを消しました。順位表はそのままです。"
+    return jsonify(payload)
+
+
 def run_api_tests() -> None:
     import tempfile
 
@@ -800,6 +852,24 @@ def run_api_tests() -> None:
             refetched = client.post("/api/refresh").get_json()
             assert refetched["standings"] is None
             assert "まだ" in refetched["notice"]
+
+            exported = client.get("/api/export").get_json()
+            assert exported["format"] == "pennant-penalty"
+            assert exported["season_year"] == 2027
+            bad = client.post("/api/import", json={"format": "other"})
+            assert bad.status_code == 400
+            exported["draft"] = {
+                "central": ["D", "S", "C", "DB", "G", "T"],
+                "pacific": ["E", "M", "Bs", "F", "L", "H"],
+            }
+            exported["locked"] = False
+            imported = client.post("/api/import", json=exported).get_json()
+            assert imported["draft"]["central"][0] == "D"
+            assert imported["locked"] is False
+            deleted = client.post("/api/data/delete").get_json()
+            assert deleted["confirmed"] is None
+            assert deleted["archives"] == []
+            assert deleted["draft"]["central"] == npb_core.DEFAULT_DRAFT["central"]
         print("APIテスト: OK")
     finally:
         npb_core.fetch_standings = original

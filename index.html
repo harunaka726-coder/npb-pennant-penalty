@@ -57,7 +57,7 @@
       border-radius: 999px;
     }
     nav a.active { color: var(--ink); background: #e8eef6; font-weight: 700; }
-    main { padding: 24px 20px 72px; }
+    main { padding: 24px 20px 96px; }
     .view { display: none; }
     .view.active { display: block; }
     .stack { display: grid; gap: 16px; min-width: 0; }
@@ -255,8 +255,22 @@
     .ok { color: var(--green); }
     .ng { color: var(--warm); }
     .loading, .empty { padding: 28px 8px; }
+    .ad-footer {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 9;
+      background: rgba(255, 255, 255, 0.96);
+      border-top: 1px solid var(--line);
+      padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+    }
+    .ad-slot {
+      max-width: 1040px; margin: 0 auto; height: 50px;
+      border: 1px dashed #c5ced8; border-radius: 8px;
+      background: #f7f9fb; color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; position: relative;
+    }
+    .ad-label { position: absolute; top: 3px; left: 8px; font-size: 10px; letter-spacing: 0.06em; }
     #toast {
-      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(12px);
+      position: fixed; left: 50%; bottom: 78px; transform: translateX(-50%) translateY(12px);
       background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 8px;
       opacity: 0; pointer-events: none; transition: opacity 160ms ease;
     }
@@ -280,7 +294,7 @@
       .brand { font-size: 15px; line-height: 1.35; }
       nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
       nav a { text-align: center; padding: 8px 4px; }
-      main { padding: 12px 12px 56px; }
+      main { padding: 12px 12px 96px; }
       .card { padding: 14px 12px; }
       .stack { gap: 12px; }
       .score-num { font-size: 56px; }
@@ -323,6 +337,13 @@
     </div>
   </header>
   <main id="app"><p class="loading">読み込み中…</p></main>
+  <footer class="ad-footer">
+    <div class="ad-slot" id="ad-banner" role="complementary" aria-label="広告">
+      <span class="ad-label">広告</span>
+      <span>広告枠</span>
+    </div>
+  </footer>
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
   <div id="toast" role="status"></div>
   <script>
     const app = {
@@ -759,6 +780,20 @@
             <h2>変更履歴</h2>
             ${historyHtml()}
           </article>
+          <article class="card">
+            <h2>データ</h2>
+            <p class="note">ログインはありません。機種を変えるときは、予想データを書き出して、新しい端末で読み込んでください。</p>
+            <div class="actions" style="margin-top:12px">
+              <button type="button" class="btn" data-action="export">データを書き出す</button>
+              <button type="button" class="btn" data-action="import">データを読み込む</button>
+              <button type="button" class="btn" data-action="delete-data">予想データを消す</button>
+            </div>
+          </article>
+          <article class="card">
+            <h2>サポート</h2>
+            <p class="note"><a href="https://harunaka726-coder.github.io/npb-pennant-penalty/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a></p>
+            <p class="note"><a href="https://forms.gle/3YbhA78mqjRDVS4n6" target="_blank" rel="noopener">お問い合わせ</a></p>
+          </article>
         </div>`;
     }
 
@@ -1051,6 +1086,16 @@
           const data = await postJson("/api/season/view", year ? { year: Number(year) } : { year: null });
           if (data && data.teams) applyState(data);
         });
+      } else if (action === "export") {
+        exportData();
+      } else if (action === "import") {
+        document.getElementById("import-file").click();
+      } else if (action === "delete-data") {
+        if (!window.confirm("予想、確定、変更履歴、過去シーズンの記録を消します。順位表は残ります。")) return;
+        enqueue(async () => {
+          const data = await postJson("/api/data/delete");
+          if (data && data.teams) applyState(data);
+        });
       } else if (action === "series") {
         const key = button.dataset.series;
         app.series[key] = !app.series[key];
@@ -1293,7 +1338,37 @@
       }
     }
 
+    async function exportData() {
+      const res = await fetch("/api/export");
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "pennant-penalty-backup.json";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      toast("バックアップを保存しました");
+    }
+
+    async function importFile(file) {
+      let data;
+      try {
+        data = JSON.parse(await file.text());
+      } catch (err) {
+        toast("JSONファイルとして読めませんでした");
+        return;
+      }
+      if (!window.confirm("いまの予想を、選んだファイルの内容に置き換えます。")) return;
+      const saved = await postJson("/api/import", data);
+      if (saved && saved.teams) applyState(saved);
+    }
+
     function bind() {
+      document.getElementById("import-file").addEventListener("change", (event) => {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        if (file) importFile(file);
+      });
       document.body.addEventListener("click", onClick);
       document.body.addEventListener("pointerdown", onPointerDown);
       document.body.addEventListener("pointermove", onPointerMove);
