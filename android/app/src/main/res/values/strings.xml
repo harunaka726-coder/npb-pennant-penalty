@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ペナントペナルティ</string>
+    <string name="title_activity_main">ペナントペナルティ</string>
+    <string name="package_name">com.harunaka.pennantpenalty</string>
+    <string name="custom_url_scheme">com.harunaka.pennantpenalty</string>
+    <string name="admob_app_id">ca-app-pub-1596742811536787~2958363417</string>
+</resources>

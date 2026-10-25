@@ -1,0 +1,12 @@
+{
+  "appId": "com.harunaka.pennantpenalty",
+  "appName": "ペナントペナルティ",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "cleartext": false
+  }
+}

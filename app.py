@@ -17,6 +17,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from urllib.parse import urlparse
+
 from flask import Flask, jsonify, request, send_from_directory
 
 import npb_core
@@ -26,6 +28,38 @@ LOCK = threading.Lock()
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
+
+
+def _cors_origin() -> str | None:
+    origin = request.headers.get("Origin", "")
+    host = (urlparse(origin).hostname or "").lower()
+    if host in {"localhost", "127.0.0.1"}:
+        return origin
+    return None
+
+
+@app.before_request
+def cors_preflight():
+    if request.method != "OPTIONS":
+        return None
+    response = app.make_response(("", 204))
+    origin = _cors_origin()
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+
+@app.after_request
+def cors_headers(response):
+    origin = _cors_origin()
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
 
 
 def _utf8_stdio() -> None:
@@ -78,7 +112,9 @@ def load_state() -> dict:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return default_state()
+        state = default_state()
+        state["_unreadable"] = True
+        return state
     state = default_state()
     if isinstance(raw, dict):
         for key in state:
@@ -139,10 +175,13 @@ def _find_archive(state: dict, year: int | None) -> dict | None:
 
 
 def save_state(state: dict) -> None:
+    if state.get("_unreadable"):
+        raise RuntimeError("データファイルを読めなかったので、上書きしません")
     path = data_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    body = {key: value for key, value in state.items() if key != "_unreadable"}
+    temporary.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(path)
 
 
@@ -904,7 +943,7 @@ def run_api_tests() -> None:
 def serve() -> None:
     port = int(os.environ.get("PORT", "5050"))
     print(f"プロ野球順位予想　ペナントペナルティ  http://127.0.0.1:{port}")
-    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

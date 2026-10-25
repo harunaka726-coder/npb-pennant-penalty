@@ -1,0 +1,17 @@
+{
+  "name": "pennant-penalty",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "www": "node scripts/copy-www.js",
+    "cap:sync": "node scripts/copy-www.js && cap sync"
+  },
+  "dependencies": {
+    "@capacitor-community/admob": "8.2.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

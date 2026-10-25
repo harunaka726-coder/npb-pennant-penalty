@@ -365,6 +365,26 @@
       appId: "ca-app-pub-1596742811536787~2958363417",
       bannerId: "ca-app-pub-1596742811536787/8551057719"
     };
+    const PUBLIC_API = "https://harunaka726-coder.github.io/npb-pennant-penalty/api/dashboard.json";
+
+    function isNativeApp() {
+      return Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+    }
+
+    async function loadStandings(force) {
+      if (isNativeApp()) {
+        const url = force ? PUBLIC_API + "?t=" + Date.now() : PUBLIC_API;
+        const res = await fetch(url, { cache: force ? "no-store" : "default" });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (data) data.legacy_user = null;
+        return data;
+      }
+      if (force) return postJson("/api/refresh");
+      const res = await fetch("/api/dashboard");
+      if (!res.ok) throw new Error(String(res.status));
+      return res.json();
+    }
     const CENTRAL_IDS = ["T", "G", "DB", "C", "S", "D"];
     const PACIFIC_IDS = ["H", "L", "F", "Bs", "M", "E"];
     const DEFAULT_DRAFT = {
@@ -380,6 +400,7 @@
         appTitle: "プロ野球順位予想　ペナントペナルティ",
         home: "ホーム", graph: "グラフ", settings: "設定", language: "言語",
         loading: "読み込み中…", fetching: "NPBの順位表を取得しています…", offline: "サーバーに接続できません。python app.py で起動しているか確認してください。",
+        offlineNative: "順位データを取得できません。通信環境を確認して、もう一度開いてください。",
         both: "両リーグ合計", miss: "ズレ", place: "位",
         central: "セ・リーグ", pacific: "パ・リーグ", cl: "セ", pl: "パ", total: "合計",
         centralFull: "セ・リーグ", pacificFull: "パ・リーグ", bothFull: "両リーグ合計",
@@ -469,6 +490,7 @@
         appTitle: "Pennant Penalty",
         home: "Home", graph: "Graphs", settings: "Settings", language: "Language",
         loading: "Loading…", fetching: "Fetching the NPB standings…", offline: "Cannot reach the server. Start it with python app.py.",
+        offlineNative: "The standings could not be loaded. Check your connection and open the app again.",
         both: "Both leagues", miss: "miss", place: "",
         central: "Central League", pacific: "Pacific League", cl: "CL", pl: "PL", total: "Total",
         centralFull: "Central League", pacificFull: "Pacific League", bothFull: "Both leagues",
@@ -625,12 +647,15 @@
       const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
       const plugin = native && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob;
       if (plugin) {
-        plugin.initialize({ appId: ADMOB.appId, initializeForTesting: false }).then(() => plugin.showBanner({
+        const footer = document.querySelector(".ad-footer");
+        plugin.initialize().then(() => plugin.showBanner({
           adId: ADMOB.bannerId,
           adSize: "BANNER",
           position: "BOTTOM_CENTER",
           margin: 0
-        })).catch(() => {});
+        })).then(() => {
+          if (footer) footer.hidden = true;
+        }).catch(() => {});
         return;
       }
       const client = ADMOB.bannerId.split("/")[0];
@@ -1276,6 +1301,10 @@
         </article>`;
     }
 
+    function serverCard() {
+      return "";
+    }
+
     function settingsView() {
       const locked = app.state.locked;
       const seen = preview();
@@ -1301,6 +1330,7 @@
               <button type="button" data-action="lang" data-lang="en" class="${lang === "en" ? "on" : ""}">English</button>
             </div>
           </article>
+          ${serverCard()}
           ${seasonCard()}
           <article class="card">
             <div class="card-head"><h2>${esc(t("predHeading"))}</h2><span class="note">${esc(stampLine())}</span></div>
@@ -1695,7 +1725,7 @@
       if (action === "refresh") {
         button.disabled = true;
         enqueue(async () => {
-          const data = await postJson("/api/refresh");
+          const data = await loadStandings(true);
           if (data && data.teams) applyState(data);
         });
       } else if (action === "share") {
@@ -2039,9 +2069,11 @@
     }
 
     async function finishMigration() {
-      await fetch("/api/data/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      if (!isNativeApp()) {
+        await fetch("/api/data/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      }
       if (app.public && app.public.standings) return;
-      const fresh = await postJson("/api/refresh");
+      const fresh = await loadStandings(true);
       if (fresh && fresh.teams) {
         app.public = fresh;
         app.user = loadUser() || defaultUser();
@@ -2056,8 +2088,7 @@
       mountAd();
       if (!location.hash) history.replaceState(null, "", "#home");
       try {
-        const res = await fetch("/api/dashboard");
-        const data = await res.json();
+        const data = await loadStandings(false);
         const viewingSaved = (() => {
           try {
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
@@ -2069,14 +2100,15 @@
         let payload = data;
         if ((!data.standings || data.stale) && !viewingSaved) {
           document.getElementById("app").innerHTML = `<p class="loading">${esc(t("fetching"))}</p>`;
-          const fresh = await postJson("/api/refresh");
+          const fresh = await loadStandings(true);
           if (fresh && fresh.teams) payload = fresh;
         }
         const shouldMove = !localStorage.getItem(STORAGE_KEY) && Boolean(payload.legacy_user);
         applyState(payload);
         if (shouldMove) await finishMigration();
       } catch (err) {
-        document.getElementById("app").innerHTML = `<p class="banner warn">${esc(t("offline"))}</p>`;
+        const message = isNativeApp() ? t("offlineNative") : t("offline");
+        document.getElementById("app").innerHTML = `<p class="banner warn">${esc(message)}</p>`;
       }
     }
 

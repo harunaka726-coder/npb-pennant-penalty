@@ -3,3 +3,11 @@ __pycache__/
 *.tmp
 data/*.tmp
 data/app_state.json
+node_modules/
+www/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+*.iml
